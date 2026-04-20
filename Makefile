@@ -17,5 +17,12 @@ phase0:
 phase0_wave:
 	$(WAVE) phase0_waveform.vcd wave.do
 
+phase1:
+	$(CC) $(FLAGS) -o phase1_out src/sim_dram.sv tb/tb_sim_dram.sv
+	$(SIM) phase1_out
+
+phase1_wave:
+	$(WAVE) phase1_waveform.vcd
+
 clean:
 	del /Q *.out *.vcd *.log 2>nul
