@@ -163,7 +163,8 @@ module cache_l2 #(
                         cpu_ready = 1'b1;  // Hit: return data immediately
                         next_state = IDLE;
                     end else begin
-                        // Miss: check if victim line is dirty
+                        // Miss: check if victim line is dirty 
+                        
                         if (valid_array[index_in][victim_way] && dirty_array[index_in][victim_way]) begin
                             next_state = WRITEBACK;  // Dirty eviction needed
                         end else begin

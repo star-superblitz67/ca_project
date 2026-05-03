@@ -33,3 +33,4 @@ phase2_wave:
 
 clean:
 	del /Q *.out *.vcd *.log 2>nul
+
