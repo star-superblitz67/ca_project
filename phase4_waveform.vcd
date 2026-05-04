@@ -1,0 +1,525 @@
+$date
+	Mon May 04 00:38:37 2026
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ps
+$end
+$scope module tb_cache_l1i $end
+$var wire 1 ! l2_read $end
+$var wire 32 " l2_addr [31:0] $end
+$var wire 1 # if_stall $end
+$var wire 32 $ cpu_rdata [31:0] $end
+$var reg 1 % clk $end
+$var reg 32 & cpu_addr [31:0] $end
+$var reg 1 ' cpu_read $end
+$var reg 8 ( l2_latency_counter [7:0] $end
+$var reg 32 ) l2_pending_data [31:0] $end
+$var reg 32 * l2_rdata [31:0] $end
+$var reg 1 + l2_ready $end
+$var reg 1 , l2_transaction_pending $end
+$var reg 1 - rst_n $end
+$scope module dut $end
+$var wire 1 % clk $end
+$var wire 32 . cpu_addr [31:0] $end
+$var wire 1 ' cpu_read $end
+$var wire 32 / l2_rdata [31:0] $end
+$var wire 1 + l2_ready $end
+$var wire 1 - rst_n $end
+$var wire 22 0 tag_in [21:0] $end
+$var wire 2 1 offset_in [1:0] $end
+$var wire 6 2 index_in [5:0] $end
+$var parameter 32 3 ADDR_WIDTH $end
+$var parameter 32 4 DATA_WIDTH $end
+$var parameter 32 5 INDEX_BITS $end
+$var parameter 32 6 LINE_SIZE $end
+$var parameter 32 7 MISS_LATENCY $end
+$var parameter 32 8 NUM_SETS $end
+$var parameter 32 9 NUM_WAYS $end
+$var parameter 32 : OFFSET_BITS $end
+$var parameter 35 ; TAG_BITS $end
+$var reg 32 < cpu_rdata [31:0] $end
+$var reg 1 = hit $end
+$var reg 1 # if_stall $end
+$var reg 32 > l2_addr [31:0] $end
+$var reg 1 ! l2_read $end
+$var reg 2 ? next_state [1:0] $end
+$var reg 2 @ state [1:0] $end
+$scope begin $ivl_for_loop5 $end
+$var integer 32 A s [31:0] $end
+$upscope $end
+$scope begin $ivl_for_loop6 $end
+$var integer 32 B i [31:0] $end
+$upscope $end
+$upscope $end
+$scope begin $ivl_for_loop7 $end
+$var integer 32 C i [31:0] $end
+$upscope $end
+$scope task test_cache_hit $end
+$var integer 32 D i [31:0] $end
+$upscope $end
+$scope task test_cold_miss $end
+$var integer 32 E i [31:0] $end
+$upscope $end
+$scope task test_multiple_misses $end
+$var integer 32 F addr [31:0] $end
+$var integer 32 G j [31:0] $end
+$upscope $end
+$scope task test_sequential_fetch $end
+$var integer 32 H i [31:0] $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+b10110 ;
+b10 :
+b1 9
+b1000000 8
+b1000 7
+b10000 6
+b110 5
+b100000 4
+b100000 3
+$end
+#0
+$dumpvars
+bx H
+bx G
+bx F
+bx E
+bx D
+b10000000000 C
+b100000000 B
+b1000000 A
+b0 @
+b0 ?
+b0 >
+0=
+b0 <
+b0 2
+b0 1
+b0 0
+b0 /
+b0 .
+0-
+0,
+0+
+b0 *
+b0 )
+b0 (
+0'
+b0 &
+0%
+b0 $
+0#
+b0 "
+0!
+$end
+#5000
+1%
+#10000
+0%
+#12000
+1-
+#15000
+1#
+b1 ?
+1'
+1%
+#20000
+0%
+#25000
+1!
+b1 @
+1#
+b1 ?
+b0 H
+0'
+1%
+#30000
+0%
+#35000
+b1000000000000000000010100000 )
+1,
+b111 (
+b1 H
+1%
+#40000
+0%
+#45000
+b10 H
+1%
+#50000
+0%
+#55000
+b11 H
+1%
+#60000
+0%
+#65000
+b100 H
+1%
+#70000
+0%
+#75000
+b101 H
+1%
+#80000
+0%
+#85000
+b110 H
+1%
+#90000
+0%
+#95000
+b111 H
+1%
+#100000
+0%
+#105000
+b1000 H
+1%
+#110000
+0%
+#115000
+b1001 H
+1%
+#120000
+0%
+#125000
+b1010 H
+1%
+#130000
+0%
+#135000
+b1011 H
+1%
+#140000
+0%
+#145000
+b1100 H
+1%
+#150000
+0%
+#155000
+b1 1
+1#
+b0 "
+b0 >
+1!
+b100 &
+b100 .
+1'
+1%
+#160000
+0%
+#165000
+1#
+b0 "
+b0 >
+1!
+b0 H
+0'
+1%
+#170000
+0%
+#175000
+b1 H
+1%
+#180000
+0%
+#185000
+b10 H
+1%
+#190000
+0%
+#195000
+b0 1
+b10000 2
+1#
+b100000000 "
+b100000000 >
+1!
+b100000000 &
+b100000000 .
+1'
+1%
+#200000
+0%
+#205000
+b1000010000000000000010100000 )
+1#
+1!
+b0 E
+0'
+1%
+#210000
+0%
+#215000
+b1 E
+1%
+#220000
+0%
+#225000
+b10 E
+1%
+#230000
+0%
+#235000
+b11 E
+1%
+#240000
+0%
+#245000
+b100 E
+1%
+#250000
+0%
+#255000
+b101 E
+1%
+#260000
+0%
+#265000
+b110 E
+1%
+#270000
+0%
+#275000
+b111 E
+1%
+#280000
+0%
+#285000
+b1000 E
+1%
+#290000
+0%
+#295000
+b1001 E
+1%
+#300000
+0%
+#305000
+b1010 E
+1%
+#310000
+0%
+#315000
+1#
+1!
+1'
+1%
+#320000
+0%
+#325000
+1#
+1!
+b0 D
+0'
+1%
+#330000
+0%
+#335000
+b1 D
+1%
+#340000
+0%
+#345000
+b10 D
+1%
+#350000
+0%
+#355000
+b1000000000 F
+b0 G
+b11 D
+1%
+#360000
+0%
+#365000
+b100000 2
+1#
+b1000000000 "
+b1000000000 >
+1!
+b1000000000 &
+b1000000000 .
+1'
+1%
+#370000
+0%
+#375000
+b1000100000000000000010100000 )
+1#
+1!
+0'
+1%
+#380000
+0%
+#385000
+1%
+#390000
+0%
+#395000
+1%
+#400000
+0%
+#405000
+1%
+#410000
+0%
+#415000
+1%
+#420000
+0%
+#425000
+1%
+#430000
+0%
+#435000
+1%
+#440000
+0%
+#445000
+1%
+#450000
+0%
+#455000
+1%
+#460000
+0%
+#465000
+1%
+#470000
+0%
+#475000
+b1001000000 F
+b1 G
+1%
+#480000
+0%
+#485000
+b100100 2
+1#
+b1001000000 "
+b1001000000 >
+1!
+b1001000000 &
+b1001000000 .
+1'
+1%
+#490000
+0%
+#495000
+b1000100100000100000010100000 )
+1#
+1!
+0'
+1%
+#500000
+0%
+#505000
+1%
+#510000
+0%
+#515000
+1%
+#520000
+0%
+#525000
+1%
+#530000
+0%
+#535000
+1%
+#540000
+0%
+#545000
+1%
+#550000
+0%
+#555000
+1%
+#560000
+0%
+#565000
+1%
+#570000
+0%
+#575000
+1%
+#580000
+0%
+#585000
+1%
+#590000
+0%
+#595000
+b1010000000 F
+b10 G
+1%
+#600000
+0%
+#605000
+b101000 2
+1#
+b1010000000 "
+b1010000000 >
+1!
+b1010000000 &
+b1010000000 .
+1'
+1%
+#610000
+0%
+#615000
+b1000101000001000000010100000 )
+1#
+1!
+0'
+1%
+#620000
+0%
+#625000
+1%
+#630000
+0%
+#635000
+1%
+#640000
+0%
+#645000
+1%
+#650000
+0%
+#655000
+1%
+#660000
+0%
+#665000
+1%
+#670000
+0%
+#675000
+1%
+#680000
+0%
+#685000
+1%
+#690000
+0%
+#695000
+1%
+#700000
+0%
+#705000
+1%
+#710000
+0%
+#715000
+b11 G
+1%

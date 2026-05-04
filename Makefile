@@ -31,6 +31,27 @@ phase2:
 phase2_wave:
 	$(WAVE) phase2_waveform.vcd
 
+phase3:
+	$(CC) $(FLAGS) -o phase3_out src/sim_dram.sv src/cache_l2.sv src/cache_l1d.sv tb/tb_cache_l1d.sv
+	$(SIM) phase3_out
+
+phase3_wave:
+	$(WAVE) phase3_waveform.vcd
+
+phase4:
+	$(CC) $(FLAGS) -o phase4_out src/sim_dram.sv src/cache_l2.sv src/cache_l1i.sv tb/tb_cache_l1i.sv
+	$(SIM) phase4_out
+
+phase4_wave:
+	$(WAVE) phase4_waveform.vcd
+
+phase5:
+	$(CC) $(FLAGS) -o phase5_out src/sim_dram.sv src/cache_l2.sv src/cache_l1i.sv src/cache_l1d.sv src/forwarding_unit.sv src/hazard_unit.sv src/mips_pipeline_integrated.sv tb/tb_integrated.sv
+	$(SIM) phase5_out
+
+phase5_wave:
+	$(WAVE) phase5_waveform.vcd
+
 clean:
 	del /Q *.out *.vcd *.log 2>nul
 
