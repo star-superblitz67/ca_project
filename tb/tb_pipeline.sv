@@ -57,7 +57,7 @@ module tb_mips_pipeline;
         $display("Final PC = %h", pc_out);
         $display("==========================================");
         $display("");
-        $display("Open GTKWave: gtkwave phase0_waveform.vcd wave.do");
+        $display("Open GTKWave: gtkwave pipeline_waveform.vcd wave.do");
         $display("");
         $display("Key signals to view:");
         $display("  - forward_a[1:0], forward_b[1:0]");
@@ -100,7 +100,7 @@ module tb_mips_pipeline;
     endtask
 
     initial begin
-        $dumpfile("phase0_waveform.vcd");
+        $dumpfile("pipeline_waveform.vcd");
         $dumpvars(0, tb_mips_pipeline);
     end
 

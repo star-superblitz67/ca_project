@@ -130,7 +130,7 @@ module tb_sim_dram;
     end
 
     initial begin
-        $dumpfile("phase1_waveform.vcd");
+        $dumpfile("dram_waveform.vcd");
         $dumpvars(0, tb_sim_dram);
     end
 

@@ -130,7 +130,7 @@ module tb_cache_l2;
         $display("✓ PLRU replacement: Replacement policy verified");
         $display("");
         $display("Open GTKWave to verify:");
-        $display("  gtkwave phase2_waveform.vcd");
+        $display("  gtkwave l2_waveform.vcd");
         $display("");
         $display("Key signals to monitor:");
         $display("  - cpu_ready, cpu_rdata");
@@ -231,7 +231,7 @@ module tb_cache_l2;
     endtask
 
     initial begin
-        $dumpfile("phase2_waveform.vcd");
+        $dumpfile("l2_waveform.vcd");
         $dumpvars(0, tb_cache_l2);
     end
 

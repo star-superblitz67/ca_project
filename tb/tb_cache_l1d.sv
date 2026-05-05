@@ -157,7 +157,7 @@ module tb_cache_l1d;
         $display("✓ LRU replacement: Correct victim selection");
         $display("");
         $display("Open GTKWave to verify:");
-        $display("  gtkwave phase3_waveform.vcd");
+        $display("  gtkwave l1d_waveform.vcd");
         $display("");
         $display("Key signals to monitor:");
         $display("  - mem_stall (pipeline control)");
@@ -270,7 +270,7 @@ module tb_cache_l1d;
     endtask
 
     initial begin
-        $dumpfile("phase3_waveform.vcd");
+        $dumpfile("l1d_waveform.vcd");
         $dumpvars(0, tb_cache_l1d);
     end
 

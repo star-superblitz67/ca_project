@@ -288,7 +288,7 @@ module tb_integrated;
     endtask
 
     initial begin
-        $dumpfile("phase5_waveform.vcd");
+        $dumpfile("mips_waveform.vcd");
         $dumpvars(0, tb_integrated);
     end
 

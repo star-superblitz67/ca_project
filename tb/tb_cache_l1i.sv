@@ -144,7 +144,7 @@ module tb_cache_l1i;
         $display("✓ Multiple misses: Direct-mapped replacement verified");
         $display("");
         $display("Open GTKWave to verify:");
-        $display("  gtkwave phase4_waveform.vcd");
+        $display("  gtkwave l1i_waveform.vcd");
         $display("");
         $display("Key signals to monitor:");
         $display("  - if_stall (pipeline control)");
@@ -263,7 +263,7 @@ module tb_cache_l1i;
     endtask
 
     initial begin
-        $dumpfile("phase4_waveform.vcd");
+        $dumpfile("l1i_waveform.vcd");
         $dumpvars(0, tb_cache_l1i);
     end
 
