@@ -6,12 +6,12 @@ FLAGS = -g2012
 SIM = vvp
 WAVE = gtkwave
 
-.PHONY: all clean phase0 phase1 phase2 phase3 phase4 phase5
+.PHONY: all clean phase0 phase1 phase2 phase3 phase4 phase5 run wave
 
-all: phase0
+all: phase5
 
 phase0:
-	$(CC) $(FLAGS) -o phase0_out src/mips_pipeline.sv src/forwarding_unit.sv src/hazard_unit.sv tb/tb_pipeline.sv
+	$(CC) $(FLAGS) -o phase0_out src/mips_processor.sv src/forwarding_unit.sv src/hazard_unit.sv tb/tb_pipeline.sv
 	$(SIM) phase0_out
 
 phase0_wave:
@@ -45,12 +45,16 @@ phase4:
 phase4_wave:
 	$(WAVE) phase4_waveform.vcd
 
-phase5:
-	$(CC) $(FLAGS) -o phase5_out src/sim_dram.sv src/cache_l2.sv src/cache_l1i.sv src/cache_l1d.sv src/forwarding_unit.sv src/hazard_unit.sv src/mips_pipeline_integrated.sv tb/tb_integrated.sv
+phase5: 
+	$(CC) $(FLAGS) -o phase5_out src/sim_dram.sv src/cache_l2.sv src/cache_l1i.sv src/cache_l1d.sv src/forwarding_unit.sv src/hazard_unit.sv src/mips_processor.sv tb/tb_system.sv
 	$(SIM) phase5_out
 
 phase5_wave:
-	$(WAVE) phase5_waveform.vcd
+	$(WAVE) phase5_waveform.vcd wave.do
+
+run: phase5
+
+wave: phase5_wave
 
 clean:
 	del /Q *.out *.vcd *.log 2>nul

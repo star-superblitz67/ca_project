@@ -175,13 +175,22 @@ module cache_l2 #(
             end
 
             WRITEBACK: begin
-                // Writeback old tag from victim_way
+                // Writeback dirty cache line to DRAM
+                // Reconstruct victim line address using its tag and current index
                 dram_write = 1'b1;
-                dram_addr = 32'h00000000;  // Simplified: would use victim's tag
-                dram_wdata = 32'b0;  // Simplified: would write full line
+                // Extract victim tag from tag_array based on victim_way
+                if (victim_way == 3'd0)
+                    dram_addr = {tag_array[index_in][0], index_in, 6'b0};
+                else if (victim_way == 3'd1)
+                    dram_addr = {tag_array[index_in][1], index_in, 6'b0};
+                else if (victim_way == 3'd2)
+                    dram_addr = {tag_array[index_in][2], index_in, 6'b0};
+                else
+                    dram_addr = {tag_array[index_in][3], index_in, 6'b0};
+                dram_wdata = data_array[index_in * NUM_WAYS * (LINE_SIZE/4) + victim_way * (LINE_SIZE/4)];
                 dram_busy = 1'b1;
                 if (dram_ready) begin
-                    next_state = ALLOCATE;  // After writeback, fetch new line
+                    next_state = ALLOCATE;  // After writeback complete, fetch new line
                 end
             end
 
