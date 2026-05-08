@@ -1,484 +1,255 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
-// ============================================================================
-// MIPS 5-Stage Pipeline Processor with Cache Interfaces
-// ============================================================================
-// Architecture: IF → ID → EX → MEM → WB
-// Features:
-//   - Forwarding unit for RAW hazard resolution (prevents ALU stalls)
-//   - Hazard detection for load-use hazards (forces stall on immediate load use)
-//   - Branch support (BEQ instruction with predicted PC update)
-//   - Separate cache interfaces for instruction (L1I) and data (L1D)
-//   - Dual stall signals: if_stall (instruction cache miss) and mem_stall (data cache miss)
-// ============================================================================
-
-module mips_pipeline_integrated (
+module mips_processor (
     input  logic        clk,
-    input  logic        rst_n,
+    input  logic        rst,
 
-    // Instruction Fetch to L1I Cache Interface
-    output logic        if_cpu_read,           // Request new instruction
-    output logic [31:0] if_cpu_addr,           // Instruction address (PC)
-    input  logic [31:0] if_cpu_rdata,          // Instruction from cache
-    input  logic        if_stall,              // Instruction cache miss (freeze IF stage)
+    // L1 Instruction Cache Interface
+    output logic        imem_req,
+    output logic [31:0] imem_addr,
+    input  logic [31:0] imem_rdata,
+    input  logic        imem_ready,
 
-    // Memory Load/Store to L1D Cache Interface
-    output logic        mem_cpu_read,          // Read data from cache
-    output logic        mem_cpu_write,         // Write data to cache
-    output logic [31:0] mem_cpu_addr,          // Memory address (from ALU)
-    output logic [31:0] mem_cpu_wdata,         // Data to write
-    input  logic [31:0] mem_cpu_rdata,         // Data from cache
-    input  logic        mem_stall              // Data cache miss (freeze MEM stage and earlier)
+    // L1 Data Cache Interface
+    output logic        dmem_req,
+    output logic        dmem_we,
+    output logic [31:0] dmem_addr,
+    output logic [31:0] dmem_wdata,
+    input  logic [31:0] dmem_rdata,
+    input  logic        dmem_ready
 );
 
-    // ========================================================================
-    // INSTRUCTION FETCH STAGE - Supplies instructions to pipeline
-    // ========================================================================
-    logic [31:0] pc;                           // Current program counter
-    logic [31:0] pc_next;                      // Next PC value
-    logic        branch_taken;                 // Branch condition met
-    logic [31:0] branch_addr;                  // Target address for branch
+    // Global Pipeline Stall: Freeze all stages on any cache miss
+    logic mem_stall;
+    assign mem_stall = (imem_req && !imem_ready) || (dmem_req && !dmem_ready);
 
-    // PC update logic
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            pc <= 32'b0;
-        end else if (!if_stall && !mem_stall) begin
-            pc <= pc_next;
+    logic hazard_stall;
+    logic flush_ID;
+    logic flush_EX;
+
+    // Pipeline write enables
+    logic en_PC, en_IF_ID, en_ID_EX, en_EX_MEM, en_MEM_WB;
+    assign en_PC     = !mem_stall && !hazard_stall;
+    assign en_IF_ID  = !mem_stall && !hazard_stall;
+    assign en_ID_EX  = !mem_stall;
+    assign en_EX_MEM = !mem_stall;
+    assign en_MEM_WB = !mem_stall;
+
+    // --- IF Stage (Instruction Fetch) ---
+    logic [31:0] pc, next_pc, pc_plus_4_IF;
+    logic branch_taken;
+    logic [31:0] branch_target;
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) pc <= 32'b0;
+        else if (en_PC) pc <= next_pc;
+    end
+
+    assign pc_plus_4_IF = pc + 4;
+    assign next_pc = branch_taken ? branch_target : pc_plus_4_IF;
+    
+    assign imem_req  = 1'b1;
+    assign imem_addr = pc;
+
+    logic [31:0] instr_ID, pc_plus_4_ID;
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst || (flush_ID && !mem_stall)) begin
+            instr_ID     <= 32'b0;
+            pc_plus_4_ID <= 32'b0;
+        end else if (en_IF_ID) begin
+            instr_ID     <= imem_rdata;
+            pc_plus_4_ID <= pc_plus_4_IF;
         end
     end
 
-    // Next PC calculation
+    // --- ID Stage (Instruction Decode) ---
+    logic [4:0] rs_ID, rt_ID, rd_ID;
+    logic [15:0] imm_ID;
+    logic [31:0] sign_ext_imm_ID;
+    
+    assign rs_ID  = instr_ID[25:21];
+    assign rt_ID  = instr_ID[20:16];
+    assign rd_ID  = instr_ID[15:11];
+    assign imm_ID = instr_ID[15:0];
+    assign sign_ext_imm_ID = {{16{imm_ID[15]}}, imm_ID};
+
+    logic [5:0] opcode, funct;
+    assign opcode = instr_ID[31:26];
+    assign funct  = instr_ID[5:0];
+
+    logic reg_dst_ID, alu_src_ID, mem_to_reg_ID, reg_write_ID;
+    logic mem_read_ID, mem_write_ID, branch_ID;
+    logic [2:0] alu_ctrl_ID;
+
+    // Control Unit decoding
     always_comb begin
-        if (branch_taken) begin
-            pc_next = branch_addr;
-        end else begin
-            pc_next = pc + 32'd4;
-        end
-    end
-
-    assign if_cpu_read = 1'b1;
-    assign if_cpu_addr = pc;
-
-    // ========================================================================
-    // IF_ID PIPELINE REGISTER
-    // ========================================================================
-    logic [31:0] if_id_instr;
-    logic [31:0] if_id_pc;
-    logic        if_id_write;
-    logic        if_id_flush;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            if_id_instr <= 32'b0;
-            if_id_pc <= 32'b0;
-        end else if ((if_id_write || if_id_flush) && !mem_stall) begin
-            if (if_id_flush) begin
-                if_id_instr <= 32'b0;
-                if_id_pc <= 32'b0;
-            end else begin
-                if_id_instr <= if_cpu_rdata;
-                if_id_pc <= pc;
-            end
-        end
-    end
-
-    always_comb begin
-        if_id_write = ~(load_use_hazard | if_stall | mem_stall);
-        if_id_flush = branch_taken | load_use_hazard;
-    end
-
-    // ========================================================================
-    // INSTRUCTION DECODE STAGE
-    // ========================================================================
-    logic [5:0]  opcode;
-    logic [4:0]  rs;
-    logic [4:0]  rt;
-    logic [4:0]  rd;
-    logic [5:0]  funct;
-    logic [15:0] imm_16;
-    logic [31:0] imm;
-
-    assign opcode = if_id_instr[31:26];
-    assign rs = if_id_instr[25:21];
-    assign rt = if_id_instr[20:16];
-    assign rd = if_id_instr[15:11];
-    assign funct = if_id_instr[5:0];
-    assign imm_16 = if_id_instr[15:0];
-    assign imm = {{16{imm_16[15]}}, imm_16};
-
-    logic        mem_read;
-    logic        mem_write;
-    logic        reg_write;
-    logic [3:0]  alu_op;
-
-    always_comb begin
-        case (opcode)
-            6'b000000: begin  // R-type
-                case (funct)
-                    6'b100000: alu_op = 4'b0000;  // add
-                    6'b100010: alu_op = 4'b0001;  // sub
-                    6'b100100: alu_op = 4'b0010;  // and
-                    6'b100101: alu_op = 4'b0011;  // or
-                    6'b101010: alu_op = 4'b0100;  // slt
-                    default:   alu_op = 4'b0000;
+        reg_dst_ID = 0; alu_src_ID = 0; mem_to_reg_ID = 0; reg_write_ID = 0;
+        mem_read_ID = 0; mem_write_ID = 0; branch_ID = 0; alu_ctrl_ID = 3'b000;
+        
+        case(opcode)
+            6'h00: begin // R-Type
+                reg_dst_ID = 1; reg_write_ID = 1;
+                case(funct)
+                    6'h20: alu_ctrl_ID = 3'b010; // ADD
+                    6'h22: alu_ctrl_ID = 3'b110; // SUB
+                    6'h24: alu_ctrl_ID = 3'b000; // AND
+                    6'h25: alu_ctrl_ID = 3'b001; // OR
+                    6'h2A: alu_ctrl_ID = 3'b111; // SLT
                 endcase
-                mem_read = 1'b0;
-                mem_write = 1'b0;
-                reg_write = 1'b1;
             end
-            6'b001000: begin  // addi
-                alu_op = 4'b0000;
-                mem_read = 1'b0;
-                mem_write = 1'b0;
-                reg_write = 1'b1;
+            6'h08: begin // ADDI
+                alu_src_ID = 1; reg_write_ID = 1; alu_ctrl_ID = 3'b010;
             end
-            6'b100011: begin  // lw
-                alu_op = 4'b0000;
-                mem_read = 1'b1;
-                mem_write = 1'b0;
-                reg_write = 1'b1;
+            6'h23: begin // LW
+                alu_src_ID = 1; mem_to_reg_ID = 1; reg_write_ID = 1; mem_read_ID = 1; alu_ctrl_ID = 3'b010;
             end
-            6'b101011: begin  // sw
-                alu_op = 4'b0000;
-                mem_read = 1'b0;
-                mem_write = 1'b1;
-                reg_write = 1'b0;
+            6'h2B: begin // SW
+                alu_src_ID = 1; mem_write_ID = 1; alu_ctrl_ID = 3'b010;
             end
-            6'b000100: begin  // beq
-                alu_op = 4'b0001;
-                mem_read = 1'b0;
-                mem_write = 1'b0;
-                reg_write = 1'b0;
-            end
-            default: begin
-                alu_op = 4'b0000;
-                mem_read = 1'b0;
-                mem_write = 1'b0;
-                reg_write = 1'b0;
+            6'h04: begin // BEQ
+                branch_ID = 1; alu_ctrl_ID = 3'b110;
             end
         endcase
     end
 
-    logic [31:0] rf [0:31];
-    logic [31:0] rs_data;
-    logic [31:0] rt_data;
+    // Register File (Write on falling edge)
+    logic [31:0] reg_file [0:31];
+    logic [31:0] reg_data1_ID, reg_data2_ID;
+    logic [4:0] dest_reg_WB;
+    logic [31:0] wb_data;
+    logic reg_write_WB;
 
-    always_comb begin
-        if (rs == 5'b00000) rs_data = 32'b0;
-        else if (rs == 5'b00001) rs_data = rf[1];
-        else if (rs == 5'b00010) rs_data = rf[2];
-        else if (rs == 5'b00011) rs_data = rf[3];
-        else if (rs == 5'b00100) rs_data = rf[4];
-        else if (rs == 5'b00101) rs_data = rf[5];
-        else if (rs == 5'b00110) rs_data = rf[6];
-        else if (rs == 5'b00111) rs_data = rf[7];
-        else if (rs == 5'b01000) rs_data = rf[8];
-        else if (rs == 5'b01001) rs_data = rf[9];
-        else if (rs == 5'b01010) rs_data = rf[10];
-        else if (rs == 5'b01011) rs_data = rf[11];
-        else if (rs == 5'b01100) rs_data = rf[12];
-        else if (rs == 5'b01101) rs_data = rf[13];
-        else if (rs == 5'b01110) rs_data = rf[14];
-        else if (rs == 5'b01111) rs_data = rf[15];
-        else if (rs == 5'b10000) rs_data = rf[16];
-        else if (rs == 5'b10001) rs_data = rf[17];
-        else if (rs == 5'b10010) rs_data = rf[18];
-        else if (rs == 5'b10011) rs_data = rf[19];
-        else if (rs == 5'b10100) rs_data = rf[20];
-        else if (rs == 5'b10101) rs_data = rf[21];
-        else if (rs == 5'b10110) rs_data = rf[22];
-        else if (rs == 5'b10111) rs_data = rf[23];
-        else if (rs == 5'b11000) rs_data = rf[24];
-        else if (rs == 5'b11001) rs_data = rf[25];
-        else if (rs == 5'b11010) rs_data = rf[26];
-        else if (rs == 5'b11011) rs_data = rf[27];
-        else if (rs == 5'b11100) rs_data = rf[28];
-        else if (rs == 5'b11101) rs_data = rf[29];
-        else if (rs == 5'b11110) rs_data = rf[30];
-        else rs_data = rf[31];
-
-        if (rt == 5'b00000) rt_data = 32'b0;
-        else if (rt == 5'b00001) rt_data = rf[1];
-        else if (rt == 5'b00010) rt_data = rf[2];
-        else if (rt == 5'b00011) rt_data = rf[3];
-        else if (rt == 5'b00100) rt_data = rf[4];
-        else if (rt == 5'b00101) rt_data = rf[5];
-        else if (rt == 5'b00110) rt_data = rf[6];
-        else if (rt == 5'b00111) rt_data = rf[7];
-        else if (rt == 5'b01000) rt_data = rf[8];
-        else if (rt == 5'b01001) rt_data = rf[9];
-        else if (rt == 5'b01010) rt_data = rf[10];
-        else if (rt == 5'b01011) rt_data = rf[11];
-        else if (rt == 5'b01100) rt_data = rf[12];
-        else if (rt == 5'b01101) rt_data = rf[13];
-        else if (rt == 5'b01110) rt_data = rf[14];
-        else if (rt == 5'b01111) rt_data = rf[15];
-        else if (rt == 5'b10000) rt_data = rf[16];
-        else if (rt == 5'b10001) rt_data = rf[17];
-        else if (rt == 5'b10010) rt_data = rf[18];
-        else if (rt == 5'b10011) rt_data = rf[19];
-        else if (rt == 5'b10100) rt_data = rf[20];
-        else if (rt == 5'b10101) rt_data = rf[21];
-        else if (rt == 5'b10110) rt_data = rf[22];
-        else if (rt == 5'b10111) rt_data = rf[23];
-        else if (rt == 5'b11000) rt_data = rf[24];
-        else if (rt == 5'b11001) rt_data = rf[25];
-        else if (rt == 5'b11010) rt_data = rf[26];
-        else if (rt == 5'b11011) rt_data = rf[27];
-        else if (rt == 5'b11100) rt_data = rf[28];
-        else if (rt == 5'b11101) rt_data = rf[29];
-        else if (rt == 5'b11110) rt_data = rf[30];
-        else rt_data = rf[31];
-    end
-
-    // ========================================================================
-    // ID_EX PIPELINE REGISTER
-    // ========================================================================
-    logic [31:0] id_ex_instr;
-    logic [31:0] id_ex_pc;
-    logic [31:0] id_ex_a;
-    logic [31:0] id_ex_b;
-    logic [31:0] id_ex_imm;
-    logic [5:0]  id_ex_opcode;
-    logic [5:0]  id_ex_funct;
-    logic [4:0]  id_ex_rs;
-    logic [4:0]  id_ex_rt;
-    logic [4:0]  id_ex_rd;
-    logic [3:0]  id_ex_alu_op;
-    logic        id_ex_mem_read;
-    logic        id_ex_mem_write;
-    logic        id_ex_reg_write;
-    logic        id_ex_flush;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            id_ex_instr <= 32'b0;
-            id_ex_pc <= 32'b0;
-            id_ex_a <= 32'b0;
-            id_ex_b <= 32'b0;
-            id_ex_imm <= 32'b0;
-            id_ex_opcode <= 6'b0;
-            id_ex_funct <= 6'b0;
-            id_ex_rs <= 5'b0;
-            id_ex_rt <= 5'b0;
-            id_ex_rd <= 5'b0;
-            id_ex_alu_op <= 4'b0;
-            id_ex_mem_read <= 1'b0;
-            id_ex_mem_write <= 1'b0;
-            id_ex_reg_write <= 1'b0;
-        end else if (!mem_stall) begin
-            if (id_ex_flush) begin
-                id_ex_instr <= 32'b0;
-                id_ex_pc <= 32'b0;
-                id_ex_a <= 32'b0;
-                id_ex_b <= 32'b0;
-                id_ex_imm <= 32'b0;
-                id_ex_opcode <= 6'b0;
-                id_ex_funct <= 6'b0;
-                id_ex_rs <= 5'b0;
-                id_ex_rt <= 5'b0;
-                id_ex_rd <= 5'b0;
-                id_ex_alu_op <= 4'b0;
-                id_ex_mem_read <= 1'b0;
-                id_ex_mem_write <= 1'b0;
-                id_ex_reg_write <= 1'b0;
-            end else begin
-                id_ex_instr <= if_id_instr;
-                id_ex_pc <= if_id_pc;
-                id_ex_a <= rs_data;
-                id_ex_b <= rt_data;
-                id_ex_imm <= imm;
-                id_ex_opcode <= opcode;
-                id_ex_funct <= funct;
-                id_ex_rs <= rs;
-                id_ex_rt <= rt;
-                id_ex_rd <= rd;
-                id_ex_alu_op <= alu_op;
-                id_ex_mem_read <= mem_read;
-                id_ex_mem_write <= mem_write;
-                id_ex_reg_write <= reg_write;
-            end
+    always_ff @(negedge clk) begin
+        if (reg_write_WB && dest_reg_WB != 0 && !mem_stall) begin
+            reg_file[dest_reg_WB] <= wb_data;
         end
     end
 
-    assign id_ex_flush = branch_taken | load_use_hazard;
+    assign reg_data1_ID = (rs_ID == 0) ? 0 : reg_file[rs_ID];
+    assign reg_data2_ID = (rt_ID == 0) ? 0 : reg_file[rt_ID];
 
-    // ========================================================================
-    // HAZARD DETECTION
-    // ========================================================================
-    logic load_use_hazard;
+    // Branch Resolution
+    assign branch_target = pc_plus_4_ID + (sign_ext_imm_ID << 2);
+    assign branch_taken  = branch_ID && (reg_data1_ID == reg_data2_ID);
 
-    always_comb begin
-        load_use_hazard = id_ex_mem_read && (
-            (id_ex_rt == rs) ||
-            (id_ex_rt == rt)
-        );
+    logic [31:0] reg_data1_EX, reg_data2_EX, sign_ext_imm_EX;
+    logic [4:0] rs_EX, rt_EX, rd_EX;
+    logic reg_dst_EX, alu_src_EX, mem_to_reg_EX, reg_write_EX;
+    logic mem_read_EX, mem_write_EX;
+    logic [2:0] alu_ctrl_EX;
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst || (flush_EX && !mem_stall)) begin
+            reg_data1_EX <= 0; reg_data2_EX <= 0; sign_ext_imm_EX <= 0;
+            rs_EX <= 0; rt_EX <= 0; rd_EX <= 0;
+            reg_dst_EX <= 0; alu_src_EX <= 0; mem_to_reg_EX <= 0; reg_write_EX <= 0;
+            mem_read_EX <= 0; mem_write_EX <= 0; alu_ctrl_EX <= 0;
+        end else if (en_ID_EX) begin
+            reg_data1_EX <= reg_data1_ID; reg_data2_EX <= reg_data2_ID; sign_ext_imm_EX <= sign_ext_imm_ID;
+            rs_EX <= rs_ID; rt_EX <= rt_ID; rd_EX <= rd_ID;
+            reg_dst_EX <= reg_dst_ID; alu_src_EX <= alu_src_ID; mem_to_reg_EX <= mem_to_reg_ID; reg_write_EX <= reg_write_ID;
+            mem_read_EX <= mem_read_ID; mem_write_EX <= mem_write_ID; alu_ctrl_EX <= alu_ctrl_ID;
+        end
     end
 
-    // ========================================================================
-    // EXECUTION STAGE
-    // ========================================================================
-    logic [1:0]  forward_a;
-    logic [1:0]  forward_b;
+    // --- EX Stage (Execute) ---
+    logic [31:0] alu_in1, alu_in2, alu_out_EX;
+    logic [4:0] dest_reg_EX;
+    logic [1:0] forward_A, forward_B;
+    logic [31:0] alu_out_MEM; 
+    logic reg_write_MEM;
 
-    forwarding_unit forward_inst (
-        .ex_mem_rd(ex_mem_rd),
-        .ex_mem_reg_write(ex_mem_reg_write),
-        .mem_wb_rd(mem_wb_rd),
-        .mem_wb_reg_write(mem_wb_reg_write),
-        .id_ex_rs(id_ex_rs),
-        .id_ex_rt(id_ex_rt),
-        .forward_a(forward_a),
-        .forward_b(forward_b)
+    always_comb begin
+        case(forward_A)
+            2'b10: alu_in1 = alu_out_MEM;
+            2'b01: alu_in1 = wb_data;
+            default: alu_in1 = reg_data1_EX;
+        endcase
+        
+        logic [31:0] fwd_b_val;
+        case(forward_B)
+            2'b10: fwd_b_val = alu_out_MEM;
+            2'b01: fwd_b_val = wb_data;
+            default: fwd_b_val = reg_data2_EX;
+        endcase
+        alu_in2 = alu_src_EX ? sign_ext_imm_EX : fwd_b_val;
+    end
+
+    always_comb begin
+        case(alu_ctrl_EX)
+            3'b010: alu_out_EX = alu_in1 + alu_in2;
+            3'b110: alu_out_EX = alu_in1 - alu_in2;
+            3'b000: alu_out_EX = alu_in1 & alu_in2;
+            3'b001: alu_out_EX = alu_in1 | alu_in2;
+            3'b111: alu_out_EX = ($signed(alu_in1) < $signed(alu_in2)) ? 32'b1 : 32'b0;
+            default: alu_out_EX = 32'b0;
+        endcase
+    end
+
+    assign dest_reg_EX = reg_dst_EX ? rd_EX : rt_EX;
+
+    logic [31:0] mem_write_data_EX;
+    always_comb begin
+        case(forward_B)
+            2'b10: mem_write_data_EX = alu_out_MEM;
+            2'b01: mem_write_data_EX = wb_data;
+            default: mem_write_data_EX = reg_data2_EX;
+        endcase
+    end
+
+    logic [31:0] mem_write_data_MEM;
+    logic [4:0] dest_reg_MEM;
+    logic mem_to_reg_MEM, mem_read_MEM, mem_write_MEM;
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            alu_out_MEM <= 0; mem_write_data_MEM <= 0; dest_reg_MEM <= 0;
+            mem_to_reg_MEM <= 0; reg_write_MEM <= 0; mem_read_MEM <= 0; mem_write_MEM <= 0;
+        end else if (en_EX_MEM) begin
+            alu_out_MEM <= alu_out_EX; mem_write_data_MEM <= mem_write_data_EX; dest_reg_MEM <= dest_reg_EX;
+            mem_to_reg_MEM <= mem_to_reg_EX; reg_write_MEM <= reg_write_EX; 
+            mem_read_MEM <= mem_read_EX; mem_write_MEM <= mem_write_EX;
+        end
+    end
+
+    // --- MEM Stage (Memory Access) ---
+    assign dmem_req   = mem_read_MEM || mem_write_MEM;
+    assign dmem_we    = mem_write_MEM;
+    assign dmem_addr  = alu_out_MEM;
+    assign dmem_wdata = mem_write_data_MEM;
+
+    logic [31:0] mem_read_data_WB, alu_out_WB;
+    logic mem_to_reg_WB;
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            mem_read_data_WB <= 0; alu_out_WB <= 0; dest_reg_WB <= 0;
+            mem_to_reg_WB <= 0; reg_write_WB <= 0;
+        end else if (en_MEM_WB) begin
+            mem_read_data_WB <= dmem_rdata;
+            alu_out_WB <= alu_out_MEM;
+            dest_reg_WB <= dest_reg_MEM;
+            mem_to_reg_WB <= mem_to_reg_MEM;
+            reg_write_WB <= reg_write_MEM;
+        end
+    end
+
+    // --- WB Stage (Write Back) ---
+    assign wb_data = mem_to_reg_WB ? mem_read_data_WB : alu_out_WB;
+
+    // Submodules
+    hazard_unit hazard_u (
+        .rs_ID(rs_ID), .rt_ID(rt_ID), .rt_EX(rt_EX),
+        .mem_read_EX(mem_read_EX), .branch_taken(branch_taken),
+        .stall_pipeline(hazard_stall), .flush_ID(flush_ID), .flush_EX(flush_EX)
     );
 
-    logic [31:0] alu_a;
-    logic [31:0] alu_b;
-    logic [31:0] forward_a_ex;
-    logic [31:0] forward_b_ex;
-    logic [31:0] forward_a_mem;
-    logic [31:0] forward_b_mem;
-
-    always_comb begin
-        case (forward_a)
-            2'b10: alu_a = forward_a_ex;
-            2'b01: alu_a = forward_a_mem;
-            default: alu_a = id_ex_a;
-        endcase
-
-        if (id_ex_opcode == 6'b000000) begin
-            case (forward_b)
-                2'b10: alu_b = forward_b_ex;
-                2'b01: alu_b = forward_b_mem;
-                default: alu_b = id_ex_b;
-            endcase
-        end else begin
-            alu_b = id_ex_imm;
-        end
-    end
-
-    logic [31:0] alu_out;
-    logic        zero;
-
-    always_comb begin
-        case (id_ex_alu_op)
-            4'b0000: alu_out = alu_a + alu_b;
-            4'b0001: alu_out = alu_a - alu_b;
-            4'b0010: alu_out = alu_a & alu_b;
-            4'b0011: alu_out = alu_a | alu_b;
-            4'b0111: alu_out = (alu_a < alu_b) ? 32'd1 : 32'd0;
-            default: alu_out = alu_a + alu_b;
-        endcase
-    end
-
-    assign zero = (alu_out == 32'b0);
-
-    always_comb begin
-        if (id_ex_opcode == 6'b000100 && zero) begin
-            branch_taken = 1'b1;
-            branch_addr = id_ex_pc + (id_ex_imm << 2);
-        end else begin
-            branch_taken = 1'b0;
-            branch_addr = 32'b0;
-        end
-    end
-
-    // ========================================================================
-    // EX_MEM PIPELINE REGISTER
-    // ========================================================================
-    logic [31:0] ex_mem_instr;
-    logic [31:0] ex_mem_pc;
-    logic [31:0] ex_mem_alu_out;
-    logic [31:0] ex_mem_data;
-    logic [4:0]  ex_mem_rd;
-    logic        ex_mem_mem_read;
-    logic        ex_mem_mem_write;
-    logic        ex_mem_reg_write;
-    logic        ex_mem_flush;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            ex_mem_instr <= 32'b0;
-            ex_mem_pc <= 32'b0;
-            ex_mem_alu_out <= 32'b0;
-            ex_mem_data <= 32'b0;
-            ex_mem_rd <= 5'b0;
-            ex_mem_mem_read <= 1'b0;
-            ex_mem_mem_write <= 1'b0;
-            ex_mem_reg_write <= 1'b0;
-        end else if (!mem_stall) begin
-            ex_mem_instr <= id_ex_instr;
-            ex_mem_pc <= id_ex_pc;
-            ex_mem_alu_out <= alu_out;
-            ex_mem_data <= alu_b;
-            ex_mem_rd <= id_ex_rd;
-            ex_mem_mem_read <= id_ex_mem_read;
-            ex_mem_mem_write <= id_ex_mem_write;
-            ex_mem_reg_write <= id_ex_reg_write;
-        end
-    end
-
-    // ========================================================================
-    // MEMORY STAGE
-    // ========================================================================
-    assign mem_cpu_read = ex_mem_mem_read;
-    assign mem_cpu_write = ex_mem_mem_write;
-    assign mem_cpu_addr = ex_mem_alu_out;
-    assign mem_cpu_wdata = ex_mem_data;
-
-    assign forward_a_ex = ex_mem_alu_out;
-    assign forward_b_ex = ex_mem_alu_out;
-
-    // ========================================================================
-    // MEM_WB PIPELINE REGISTER
-    // ========================================================================
-    logic [31:0] mem_wb_instr;
-    logic [31:0] mem_wb_pc;
-    logic [31:0] mem_wb_alu_out;
-    logic [31:0] mem_wb_mem_data;
-    logic [4:0]  mem_wb_rd;
-    logic        mem_wb_reg_write;
-    logic        mem_wb_is_load;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            mem_wb_instr <= 32'b0;
-            mem_wb_pc <= 32'b0;
-            mem_wb_alu_out <= 32'b0;
-            mem_wb_mem_data <= 32'b0;
-            mem_wb_rd <= 5'b0;
-            mem_wb_reg_write <= 1'b0;
-            mem_wb_is_load <= 1'b0;
-        end else begin
-            mem_wb_instr <= ex_mem_instr;
-            mem_wb_pc <= ex_mem_pc;
-            mem_wb_alu_out <= ex_mem_alu_out;
-            mem_wb_mem_data <= mem_cpu_rdata;
-            mem_wb_rd <= ex_mem_rd;
-            mem_wb_reg_write <= ex_mem_reg_write;
-            mem_wb_is_load <= ex_mem_mem_read;
-        end
-    end
-
-    assign forward_a_mem = mem_wb_is_load ? mem_wb_mem_data : mem_wb_alu_out;
-    assign forward_b_mem = mem_wb_is_load ? mem_wb_mem_data : mem_wb_alu_out;
-
-    // ========================================================================
-    // WRITE-BACK STAGE
-    // ========================================================================
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            for (int i = 0; i < 32; i++) begin
-                rf[i] <= 32'b0;
-            end
-        end else if (mem_wb_reg_write && mem_wb_rd != 5'b0) begin
-            if (mem_wb_is_load) begin
-                rf[mem_wb_rd] <= mem_wb_mem_data;
-            end else begin
-                rf[mem_wb_rd] <= mem_wb_alu_out;
-            end
-        end
-    end
+    forwarding_unit forward_u (
+        .rs_EX(rs_EX), .rt_EX(rt_EX),
+        .rd_MEM(dest_reg_MEM), .reg_write_MEM(reg_write_MEM),
+        .rd_WB(dest_reg_WB), .reg_write_WB(reg_write_WB),
+        .forward_A(forward_A), .forward_B(forward_B)
+    );
 
 endmodule

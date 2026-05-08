@@ -1,28 +1,28 @@
+`timescale 1ns / 1ps
+
 module hazard_unit (
-    input  logic        id_ex_mem_read,
-    input  logic [4:0]  id_ex_rt,
-    input  logic [4:0]  if_id_rs,
-    input  logic [4:0]  if_id_rt,
-    input  logic        ex_mem_mem_write,
-    input  logic [4:0]  id_ex_rs,
-    input  logic [4:0]  id_ex_rt_next,
-    input  logic        cache_stall,
-    output logic        pc_write,
-    output logic        if_id_write,
-    output logic        id_ex_flush
+    input  logic [4:0] rs_ID,
+    input  logic [4:0] rt_ID,
+    input  logic [4:0] rt_EX,
+    input  logic       mem_read_EX,
+    input  logic       branch_taken,
+    
+    output logic       stall_pipeline, // Stalls PC and IF/ID
+    output logic       flush_ID,       // Flushes IF/ID
+    output logic       flush_EX        // Flushes ID/EX
 );
 
+    // Detect Load-Use hazard: Stall if the EX stage is loading data that the ID stage needs.
+    // Ignores $zero (register 0) as it cannot be overwritten.
     logic load_use_hazard;
-    logic branch_hazard;
+    assign load_use_hazard = mem_read_EX && ((rt_EX == rs_ID) || (rt_EX == rt_ID)) && (rt_EX != 0);
 
-    assign load_use_hazard = id_ex_mem_read && (
-        (id_ex_rt == if_id_rs) || (id_ex_rt == if_id_rt)
-    );
+    // Pause PC and IF/ID registers for 1 cycle to allow memory read to complete
+    assign stall_pipeline = load_use_hazard;
 
-    assign branch_hazard = 1'b0;
-
-    assign pc_write = ~(load_use_hazard || cache_stall);
-    assign if_id_write = ~(load_use_hazard || cache_stall);
-    assign id_ex_flush = load_use_hazard || cache_stall;
+    // Flush EX to insert a NOP on a load-use hazard.
+    // Flush ID (and EX) on a taken branch to discard the incorrectly fetched instruction.
+    assign flush_EX = load_use_hazard || branch_taken;
+    assign flush_ID = branch_taken;
 
 endmodule

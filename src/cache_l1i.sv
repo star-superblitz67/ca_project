@@ -1,134 +1,106 @@
-// L1 Instruction Cache (1KB, direct-mapped, read-only)
-// Connects to cache_l2 for misses
-// No write operations, no replacement policy needed
+`timescale 1ns / 1ps
 
-module cache_l1i #(
-    parameter DATA_WIDTH  = 32,
-    parameter ADDR_WIDTH  = 32,
-    parameter LINE_SIZE   = 16,  // bytes (4 words)
-    parameter NUM_SETS    = 64,
-    parameter NUM_WAYS    = 1,   // Direct-mapped
-    parameter MISS_LATENCY = 8   // cycles from L1I miss to L2 response
-) (
-    input  logic                        clk,
-    input  logic                        rst_n,
-    
-    // CPU/Pipeline interface (from IF stage)
-    input  logic                        cpu_read,
-    input  logic [ADDR_WIDTH-1:0]       cpu_addr,
-    output logic [DATA_WIDTH-1:0]       cpu_rdata,
-    output logic                        if_stall,
-    
-    // L2 interface (read from cache_l2)
-    output logic                        l2_read,
-    output logic [ADDR_WIDTH-1:0]       l2_addr,
-    input  logic [DATA_WIDTH-1:0]       l2_rdata,
-    input  logic                        l2_ready
+module cache_l1i (
+    input  logic         clk,
+    input  logic         rst,
+
+    // CPU Interface
+    input  logic         cpu_req,
+    input  logic [31:0]  cpu_addr,
+    output logic [31:0]  cpu_rdata,
+    output logic         cpu_ready,
+
+    // L2 Interface
+    output logic         l2_req,
+    output logic [31:0]  l2_addr,
+    input  logic [127:0] l2_rdata,
+    input  logic         l2_ready
 );
 
-    // Cache dimensions
-    localparam OFFSET_BITS = $clog2(LINE_SIZE / 4);  // 2 bits for 4 words
-    localparam INDEX_BITS  = $clog2(NUM_SETS);        // 6 bits for 64 sets
-    localparam TAG_BITS    = ADDR_WIDTH - INDEX_BITS - OFFSET_BITS - 2;  // 22 bits
+    // Read-Only, Direct Mapped, 128 lines, 16 bytes per line
+    localparam INDEX_BITS = 7;
+    localparam OFFSET_BITS = 4;
+    localparam TAG_BITS = 32 - INDEX_BITS - OFFSET_BITS;
 
-    // Address decomposition
-    logic [TAG_BITS-1:0]    tag_in;
-    logic [INDEX_BITS-1:0]  index_in;
-    logic [OFFSET_BITS-1:0] offset_in;
-
-    assign offset_in = cpu_addr[OFFSET_BITS+1:2];
-    assign index_in  = cpu_addr[INDEX_BITS+OFFSET_BITS+1:OFFSET_BITS+2];
-    assign tag_in    = cpu_addr[ADDR_WIDTH-1:INDEX_BITS+OFFSET_BITS+2];
-
-    // Cache storage: direct-mapped [set][0]
-    logic [TAG_BITS-1:0]    tag_array    [0:NUM_SETS-1];
-    logic                   valid_array  [0:NUM_SETS-1];
-    logic [DATA_WIDTH-1:0]  data_array   [0:(NUM_SETS*(LINE_SIZE/4))-1];
-
-    // FSM states
+    // 3-State FSM (No Write-Back needed for read-only I-Cache)
     typedef enum logic [1:0] {
-        IDLE,           // Normal operation
-        ALLOCATE        // Reading missing line from L2
+        IDLE        = 2'b00,
+        COMPARE_TAG = 2'b01,
+        ALLOCATE    = 2'b10
     } state_t;
 
     state_t state, next_state;
+
+    // Cache Arrays (No dirty bits)
+    logic [127:0]      data_array  [0:127];
+    logic [TAG_BITS-1:0] tag_array [0:127];
+    logic              valid_array [0:127];
+
+    logic [TAG_BITS-1:0] req_tag;
+    logic [INDEX_BITS-1:0] req_idx;
+    logic [1:0]            req_word_offset;
+
+    assign req_tag         = cpu_addr[31 : 32-TAG_BITS];
+    assign req_idx         = cpu_addr[10 : 4];
+    assign req_word_offset = cpu_addr[3 : 2];
+
     logic hit;
-    
-    // Combinational hit detection (direct-mapped)
+    assign hit = valid_array[req_idx] && (tag_array[req_idx] == req_tag);
+
+    logic [127:0] cur_data;
+    assign cur_data = data_array[req_idx];
+
+    // Word selection
     always_comb begin
-        hit = valid_array[index_in] && (tag_array[index_in] == tag_in);
+        case(req_word_offset)
+            2'b00: cpu_rdata = cur_data[31:0];
+            2'b01: cpu_rdata = cur_data[63:32];
+            2'b10: cpu_rdata = cur_data[95:64];
+            2'b11: cpu_rdata = cur_data[127:96];
+        endcase
     end
 
-    // FSM state transitions and L2 requests
-    always_comb begin
-        next_state = state;
-        l2_read = 1'b0;
-        l2_addr = cpu_addr;
-        cpu_rdata = 32'b0;
-        if_stall = 1'b0;
+    assign l2_addr = {req_tag, req_idx, 4'b0000};
 
-        if (state == IDLE) begin
-            if (cpu_read) begin
-                if (hit) begin
-                    if_stall = 1'b0;  // Hit: no stall
-                    next_state = IDLE;
-                end else begin
-                    // Miss: fetch from L2
-                    next_state = ALLOCATE;
-                    if_stall = 1'b1;  // Stall pipeline on miss
-                end
-            end
-        end else if (state == ALLOCATE) begin
-            l2_read = 1'b1;
-            l2_addr = {tag_in, index_in, 4'b0};  // Line-aligned address
-            if_stall = 1'b1;
-            if (l2_ready) begin
-                // Fetch from L2 complete
-                next_state = IDLE;
-            end
-        end else begin
-            next_state = IDLE;
-        end
-    end
-
-    // Sequential state update
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    // Sequential updates
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
             state <= IDLE;
+            for (int i = 0; i < 128; i++) valid_array[i] <= 1'b0;
         end else begin
             state <= next_state;
+            if (state == ALLOCATE && l2_ready) begin
+                data_array[req_idx]  <= l2_rdata;
+                tag_array[req_idx]   <= req_tag;
+                valid_array[req_idx] <= 1'b1;
+            end
         end
     end
 
-    // Cache data read logic
+    // Combinational FSM logic
     always_comb begin
-        if (hit) begin
-            // Read from cache on hit
-            cpu_rdata = data_array[index_in * (LINE_SIZE/4) + offset_in];
-        end else begin
-            cpu_rdata = l2_rdata;
-        end
-    end
+        next_state = state;
+        cpu_ready  = 1'b0;
+        l2_req     = 1'b0;
 
-    // Instruction fetch (no write operations)
-    always_ff @(posedge clk) begin
-        // On L2 data arrival (allocate), write full line
-        if (state == ALLOCATE && l2_ready) begin
-            valid_array[index_in] <= 1'b1;
-            tag_array[index_in] <= tag_in;
-            data_array[index_in * (LINE_SIZE/4) + offset_in] <= l2_rdata;
-        end
-    end
-
-    // Initialize cache on reset
-    initial begin
-        for (int s = 0; s < NUM_SETS; s = s + 1) begin
-            tag_array[s] <= {TAG_BITS{1'b0}};
-            valid_array[s] <= 1'b0;
-        end
-        for (int i = 0; i < (NUM_SETS * (LINE_SIZE/4)); i = i + 1) begin
-            data_array[i] <= 32'b0;
-        end
+        case (state)
+            IDLE: begin
+                if (cpu_req) next_state = COMPARE_TAG;
+            end
+            COMPARE_TAG: begin
+                if (hit) begin
+                    cpu_ready = 1'b1;
+                    next_state = IDLE;
+                end else begin
+                    next_state = ALLOCATE;
+                end
+            end
+            ALLOCATE: begin
+                l2_req = 1'b1;
+                if (l2_ready) next_state = COMPARE_TAG;
+            end
+            default: next_state = IDLE;
+        endcase
     end
 
 endmodule
