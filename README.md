@@ -1,88 +1,74 @@
-Multilevel Cache Hierarchy with 5-Stage MIPS Pipeline
+# Implementation of a 5-Stage MIPS Pipeline with a Multilevel Cache Hierarchy
 
-This project implements a fully functional 5-stage MIPS processor pipeline integrated with a multilevel cache hierarchy (Split L1 + Unified L2) in SystemVerilog. The architecture is designed to optimize Average Memory Access Time (AMAT) and efficiently manage memory bandwidth using advanced cache policies and pipeline hazard resolutions.
+This repository details the implementation of a comprehensive 5-stage MIPS processor pipeline, integrated with a multilevel cache hierarchy encompassing split Level 1 (L1) caches and a unified Level 2 (L2) cache, developed in SystemVerilog. The architectural design is primarily focused on the optimization of Average Memory Access Time (AMAT) and the efficient management of memory bandwidth through the deployment of advanced cache policies and pipeline hazard resolution mechanisms.
 
-Architecture Overview
+## Architecture Overview
 
-1. MIPS 5-Stage Pipeline
+### 1. MIPS 5-Stage Pipeline
 
-The core is a classic 5-stage RISC pipeline:
+The core processing unit utilizes a quintessential 5-stage Reduced Instruction Set Computer (RISC) pipeline architecture:
 
-IF (Instruction Fetch): Fetches instructions from the L1 Instruction Cache.
+* **Instruction Fetch (IF)**: Retrieves instructions from the L1 Instruction Cache.
 
-ID (Instruction Decode): Decodes instructions, reads registers, and resolves branches early.
+* **Instruction Decode (ID)**: Decodes fetched instructions, accesses the register file, and executes early branch resolution.
 
-EX (Execute): Performs ALU operations.
+* **Execute (EX)**: Executes arithmetic and logical operations utilizing the Arithmetic Logic Unit (ALU).
 
-MEM (Memory Access): Reads from or writes to the L1 Data Cache.
+* **Memory Access (MEM)**: Interfaces with the L1 Data Cache for requisite memory read or write operations.
 
-WB (Write Back): Writes results back to the Register File.
+* **Write Back (WB)**: Commits execution results back to the architectural register file.
 
-2. Hazard & Forwarding Units
+### 2. Hazard & Forwarding Units
 
-To maintain a high Instructions Per Cycle (IPC) without data corruption:
+To sustain optimal Instructions Per Cycle (IPC) throughput while guaranteeing data integrity, the architecture incorporates the following mechanisms:
 
-Forwarding Unit: Implements EX/MEM and MEM/WB forwarding to resolve Read-After-Write (RAW) hazards without stalling.
+* **Forwarding Unit**: Implements data forwarding paths between the EX/MEM and MEM/WB stages to resolve Read-After-Write (RAW) data hazards without necessitating pipeline stalls.
 
-Hazard Unit: Detects Load-Use hazards to insert a 1-cycle pipeline bubble and flushes the pipeline upon taken branches.
+* **Hazard Unit**: Identifies Load-Use structural hazards to insert a localized one-cycle pipeline stall (bubble) and executes complete pipeline flushes upon the detection of taken branches to mitigate control hazards.
 
-3. Multilevel Cache Hierarchy
+### 3. Multilevel Cache Hierarchy
 
-L1 Instruction Cache (L1i): Direct-mapped, read-only cache optimized for rapid instruction fetching (3-State FSM).
+* **L1 Instruction Cache (L1i)**: A direct-mapped, read-only cache engineered for accelerated instruction fetching, managed by a 3-state Finite State Machine (FSM).
 
-L1 Data Cache (L1d): Direct-mapped data cache implementing a Write-Back, Write-Allocate policy.
+* **L1 Data Cache (L1d)**: A direct-mapped cache memory employing a strict Write-Back, Write-Allocate policy to minimize write latency.
 
-Unified L2 Cache (L2): A larger, unified cache that arbitrates requests between the L1i and L1d caches, backing them up before querying main memory.
+* **Unified L2 Cache (L2)**: A higher-capacity, unified cache structure that arbitrates concurrent requests from the L1i and L1d caches, serving as an intermediary buffer prior to main memory access.
 
-DRAM Simulator: Simulates main memory with an artificial latency penalty to accurately test the cache hierarchy's AMAT improvements.
+* **DRAM Simulator**: A simulated main memory module incorporating artificial latency to facilitate the accurate evaluation of AMAT improvements across the cache hierarchy.
 
-L1 Data Cache: 4-State FSM (Write-Back, Write-Allocate)
+## L1 Data Cache: 4-State FSM (Write-Back, Write-Allocate)
 
-The L1 Data Cache is governed by a precise 4-state Finite State Machine to minimize main memory traffic:
+The operational behavior of the L1 Data Cache is governed by a rigorously defined 4-state Finite State Machine, designed specifically to attenuate main memory traffic:
 
-IDLE: The cache waits for a memory request from the CPU.
+1. **`IDLE`**: The cache remains in a quiescent state pending an active memory request from the central processing unit.
 
-COMPARE_TAG: The cache checks if the requested address is a hit.
+2. **`COMPARE_TAG`**: The system evaluates the requested memory address to determine cache hit or miss status.
 
-If Hit: The data is read/written. On a write, the dirty bit is set. Transitions back to IDLE.
+   * **Hit**: Data is actively read or written. During a write operation, the respective `dirty` bit is asserted. The FSM subsequently reverts to the `IDLE` state.
 
-If Miss: Checks the state of the current block. If the block is valid and dirty, transitions to WRITE_BACK. Otherwise, transitions to ALLOCATE.
+   * **Miss**: The state of the currently residing block is evaluated. Should the block be both valid and dirty, the FSM transitions to the `WRITE_BACK` state. Otherwise, it proceeds directly to the `ALLOCATE` state.
 
-WRITE_BACK: Evicts the current dirty block to the L2 cache to preserve data integrity. Once L2 is ready, transitions to ALLOCATE.
+3. **`WRITE_BACK`**: The active dirty block is evicted and written back to the L2 cache to ensure data coherence. Upon receiving a ready signal from the L2 cache, the FSM transitions to the `ALLOCATE` state.
 
-ALLOCATE: Fetches the newly requested block from the L2 cache into the L1 cache. Once fetched, transitions back to COMPARE_TAG to successfully resolve the CPU's request.
+4. **`ALLOCATE`**: The required memory block is fetched from the L2 cache and allocated within the L1 cache. Following successful retrieval, the FSM returns to the `COMPARE_TAG` state to fulfill the initial processor request.
 
-Global Pipeline Stalling
+## Global Pipeline Stalling
 
-The processor features a robust global stall mechanism. If either the L1i or L1d cache experiences a miss, a global mem_stall signal is asserted. This cleanly freezes the PC, IF/ID, ID/EX, EX/MEM, and MEM/WB registers, preventing the pipeline from drifting out of sync until the memory hierarchy resolves the request.
+The processor architecture incorporates a robust global stall mechanism to manage memory access latencies. In the event of a cache miss within either the L1i or L1d modules, a global `mem_stall` signal is asserted. This control signal synchronously suspends the Program Counter (`PC`) alongside the `IF/ID`, `ID/EX`, `EX/MEM`, and `MEM/WB` inter-stage registers. This ensures the pipeline remains temporally synchronized while the memory hierarchy resolves the outstanding data request.
 
-Running the Simulation
+## Simulation Procedures
 
-Prerequisites
+### Prerequisites
 
-Icarus Verilog (iverilog): For compiling the SystemVerilog source files.
+* **Icarus Verilog (`iverilog`)**: Required for the compilation of SystemVerilog source code.
 
-GTKWave: For viewing the generated .vcd waveform files.
+* **GTKWave**: Required for the visualization of generated Value Change Dump (`.vcd`) waveform files.
 
-Compilation & Execution
+### Compilation & Execution
 
-Run the following commands in your terminal from the project root:
+Execute the following commands within the terminal from the root directory of the project:
 
-Compile the design:
+1. **Compile the hardware design:**
 
-iverilog -g2012 -o mips_sim src/*.sv tb/tb_system.sv
-
-
-Run the simulation:
-
-vvp mips_sim
-
-
-This will run the testbench and generate a mips_waveform.vcd file.
-
-View the Waveforms:
-
-gtkwave mips_waveform.vcd
-
-
-Use the GTKWave GUI to inspect the pipeline registers, hazard signals, and the L1 Data Cache's 4-state FSM transitions.
+   ```bash
+   iverilog -g2012 -o mips_sim src/*.sv tb/tb_system.sv
