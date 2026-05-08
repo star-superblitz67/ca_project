@@ -72,3 +72,11 @@ Execute the following commands within the terminal from the root directory of th
 
    ```bash
    iverilog -g2012 -o mips_sim src/*.sv tb/tb_system.sv
+2. **Execute simulation:**
+
+   ```bash
+   vvp mips_sim
+3. **Gtkwave waveform:**
+
+   ```bash
+   gtkwave mips_waveform.vcd   
