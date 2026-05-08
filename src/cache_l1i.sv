@@ -4,13 +4,13 @@ module cache_l1i (
     input  logic         clk,
     input  logic         rst,
 
-    // CPU Interface
+    // CPU side interface
     input  logic         cpu_req,
     input  logic [31:0]  cpu_addr,
     output logic [31:0]  cpu_rdata,
     output logic         cpu_ready,
 
-    // L2 Interface
+    // L2 cache side interface
     output logic         l2_req,
     output logic [31:0]  l2_addr,
     input  logic [127:0] l2_rdata,
@@ -18,19 +18,20 @@ module cache_l1i (
 );
 
     // ==========================================
-    // DECLARATIONS (MUST BE AT THE TOP FOR ICARUS)
+    // DECLARATIONS (Must be at the top for Icarus Verilog compatibility)
     // ==========================================
     localparam INDEX_BITS = 7;
     localparam OFFSET_BITS = 4;
-    localparam TAG_BITS = 21; // 32 - 7 - 4
+    localparam TAG_BITS = 21;
 
-    // Replaced enum with localparams
+    // This cache is read-only, so it only needs a 3-state FSM
     localparam IDLE        = 2'b00;
     localparam COMPARE_TAG = 2'b01;
     localparam ALLOCATE    = 2'b10;
 
     logic [1:0] state, next_state;
 
+    // Cache storage. Notice there's no dirty array because instructions aren't modified
     logic [127:0]      data_array  [0:127];
     logic [TAG_BITS-1:0] tag_array [0:127];
     logic              valid_array [0:127];
@@ -54,10 +55,17 @@ module cache_l1i (
     assign cur_data = data_array[req_idx];
     assign l2_addr = {req_tag, req_idx, 4'b0000};
 
-    // Word-select mux: shift the 128-bit line right by (word_offset * 32) bits, then take low 32.
-    // This avoids constant-select-in-always_comb issues in Icarus Verilog.
-    assign cpu_rdata = cur_data[32*req_word_offset +: 32];
+    // Grab the specific word the CPU asked for
+    always_comb begin
+        case(req_word_offset)
+            2'b00: cpu_rdata = cur_data[31:0];
+            2'b01: cpu_rdata = cur_data[63:32];
+            2'b10: cpu_rdata = cur_data[95:64];
+            2'b11: cpu_rdata = cur_data[127:96];
+        endcase
+    end
 
+    // Update state and write new blocks from L2 into the cache
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= IDLE;
@@ -72,6 +80,7 @@ module cache_l1i (
         end
     end
 
+    // Figure out where the FSM should go next
     always_comb begin
         next_state = state;
         cpu_ready  = 1'b0;
@@ -86,12 +95,12 @@ module cache_l1i (
                     cpu_ready = 1'b1;
                     next_state = IDLE;
                 end else begin
-                    next_state = ALLOCATE;
+                    next_state = ALLOCATE; // Miss! Go get it from L2.
                 end
             end
             ALLOCATE: begin
                 l2_req = 1'b1;
-                if (l2_ready) next_state = COMPARE_TAG;
+                if (l2_ready) next_state = COMPARE_TAG; // L2 gave it to us, retry the tag check
             end
             default: next_state = IDLE;
         endcase

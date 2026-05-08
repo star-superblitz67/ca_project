@@ -4,13 +4,13 @@ module cache_l2 (
     input  logic         clk,
     input  logic         rst,
 
-    // L1 Instruction Cache Interface
+    // Interface with the L1 Instruction Cache
     input  logic         l1i_req,
     input  logic [31:0]  l1i_addr,
     output logic [127:0] l1i_rdata,
     output logic         l1i_ready,
 
-    // L1 Data Cache Interface
+    // Interface with the L1 Data Cache
     input  logic         l1d_req,
     input  logic         l1d_we,
     input  logic [31:0]  l1d_addr,
@@ -18,7 +18,7 @@ module cache_l2 (
     output logic [127:0] l1d_rdata,
     output logic         l1d_ready,
 
-    // Main Memory (DRAM) Interface
+    // Interface with the main memory (DRAM simulator)
     output logic         mem_req,
     output logic         mem_we,
     output logic [31:0]  mem_addr,
@@ -28,13 +28,12 @@ module cache_l2 (
 );
 
     // ==========================================
-    // DECLARATIONS (MUST BE AT THE TOP FOR ICARUS)
+    // DECLARATIONS (Must be at the top for Icarus Verilog compatibility)
     // ==========================================
     localparam INDEX_BITS = 8;
     localparam OFFSET_BITS = 4;
-    localparam TAG_BITS = 20; // 32 - 8 - 4
+    localparam TAG_BITS = 20;
 
-    // Replaced enum with localparams
     localparam IDLE        = 3'd0;
     localparam COMPARE_TAG = 3'd2;
     localparam WRITE_BACK  = 3'd3;
@@ -51,7 +50,7 @@ module cache_l2 (
     logic active_we;
     logic [31:0] active_addr;
     logic [127:0] active_wdata;
-    logic serving_l1d;
+    logic serving_l1d; // This tracks if we are currently helping L1 Data or L1 Instruction
 
     logic [TAG_BITS-1:0] req_tag;
     logic [INDEX_BITS-1:0] req_idx;
@@ -65,6 +64,8 @@ module cache_l2 (
     // ==========================================
     // ASSIGNMENTS & LOGIC
     // ==========================================
+    
+    // Multiplex the signals based on who we are serving right now
     assign active_req   = serving_l1d ? l1d_req : l1i_req;
     assign active_we    = serving_l1d ? l1d_we : 1'b0;
     assign active_addr  = serving_l1d ? l1d_addr : l1i_addr;
@@ -80,12 +81,16 @@ module cache_l2 (
 
     assign hit = cur_valid && (cur_tag == req_tag);
 
+    // Both L1 caches get the same data out, but we only assert 'ready' for the one we're serving
     assign l1d_rdata = cur_data;
     assign l1i_rdata = cur_data;
 
+    // Give DRAM the old tag if evicting, otherwise the new tag
     assign mem_addr  = (state == WRITE_BACK) ? {cur_tag, req_idx, 4'b0000} : {req_tag, req_idx, 4'b0000};
     assign mem_wdata = cur_data;
 
+    // Arbitration: decide who gets to use the L2 cache next
+    // We give priority to the Data Cache if both ask at the same time
     always_ff @(posedge clk or posedge rst) begin
         if (rst) serving_l1d <= 1'b0;
         else if (state == IDLE) begin
@@ -94,6 +99,7 @@ module cache_l2 (
         end
     end
 
+    // Handle updating the cache arrays
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= IDLE;
@@ -116,6 +122,7 @@ module cache_l2 (
         end
     end
 
+    // Main L2 state machine logic
     always_comb begin
         next_state = state;
         l1i_ready  = 1'b0;
@@ -129,6 +136,7 @@ module cache_l2 (
             end
             COMPARE_TAG: begin
                 if (hit) begin
+                    // Let the correct L1 cache know we're done
                     if (serving_l1d) l1d_ready = 1'b1;
                     else             l1i_ready = 1'b1;
                     next_state = IDLE;
