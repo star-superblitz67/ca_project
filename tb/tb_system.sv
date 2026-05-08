@@ -5,11 +5,6 @@ module tb_system();
     logic clk;
     logic rst;
 
-    initial begin
-        clk = 0;
-        forever #5 clk = ~clk;
-    end
-
     logic        imem_req, imem_ready;
     logic [31:0] imem_addr, imem_rdata;
 
@@ -27,6 +22,11 @@ module tb_system();
     logic         mem_req, mem_we, mem_ready;
     logic [31:0]  mem_addr;
     logic [127:0] mem_wdata, mem_rdata;
+
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk;
+    end
 
     mips_processor cpu (
         .clk(clk), .rst(rst),
@@ -59,11 +59,9 @@ module tb_system();
     );
 
     initial begin
-        // Setup GTKWave VCD dump files
         $dumpfile("mips_waveform.vcd");
         $dumpvars(0, tb_system);
 
-        // Hardware Reset
         rst = 1;
         #20 rst = 0;
         

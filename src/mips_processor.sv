@@ -19,31 +19,70 @@ module mips_processor (
     input  logic        dmem_ready
 );
 
-    // Global Pipeline Stall: Freeze all stages on any cache miss
+    // ==========================================
+    // DECLARATIONS (MUST BE AT THE TOP FOR ICARUS)
+    // ==========================================
     logic mem_stall;
-    assign mem_stall = (imem_req && !imem_ready) || (dmem_req && !dmem_ready);
-
     logic hazard_stall;
     logic flush_ID;
     logic flush_EX;
-
-    // Pipeline write enables
+    
     logic en_PC, en_IF_ID, en_ID_EX, en_EX_MEM, en_MEM_WB;
+    
+    logic [31:0] pc, next_pc, pc_plus_4_IF;
+    logic branch_taken;
+    logic [31:0] branch_target;
+    
+    logic [31:0] instr_ID, pc_plus_4_ID;
+    
+    logic [4:0] rs_ID, rt_ID, rd_ID;
+    logic [15:0] imm_ID;
+    logic [31:0] sign_ext_imm_ID;
+    logic [5:0] opcode, funct;
+    
+    logic reg_dst_ID, alu_src_ID, mem_to_reg_ID, reg_write_ID;
+    logic mem_read_ID, mem_write_ID, branch_ID;
+    logic [2:0] alu_ctrl_ID;
+    
+    logic [31:0] reg_file [0:31];
+    logic [31:0] reg_data1_ID, reg_data2_ID;
+    logic [4:0] dest_reg_WB;
+    logic [31:0] wb_data;
+    logic reg_write_WB;
+    
+    logic [31:0] reg_data1_EX, reg_data2_EX, sign_ext_imm_EX;
+    logic [4:0] rs_EX, rt_EX, rd_EX;
+    logic reg_dst_EX, alu_src_EX, mem_to_reg_EX, reg_write_EX;
+    logic mem_read_EX, mem_write_EX;
+    logic [2:0] alu_ctrl_EX;
+    
+    logic [31:0] alu_in1, alu_in2, alu_out_EX;
+    logic [4:0] dest_reg_EX;
+    logic [1:0] forward_A, forward_B;
+    logic [31:0] alu_out_MEM; 
+    logic reg_write_MEM;
+    
+    // Extracted out of always_comb block to satisfy Icarus
+    logic [31:0] fwd_b_val; 
+    
+    logic [31:0] mem_write_data_EX;
+    logic [31:0] mem_write_data_MEM;
+    logic [4:0] dest_reg_MEM;
+    logic mem_to_reg_MEM, mem_read_MEM, mem_write_MEM;
+    
+    logic [31:0] mem_read_data_WB, alu_out_WB;
+    logic mem_to_reg_WB;
+
+    // ==========================================
+    // ASSIGNMENTS & LOGIC
+    // ==========================================
+    assign mem_stall = (imem_req && !imem_ready) || (dmem_req && !dmem_ready);
+
     assign en_PC     = !mem_stall && !hazard_stall;
     assign en_IF_ID  = !mem_stall && !hazard_stall;
     assign en_ID_EX  = !mem_stall;
     assign en_EX_MEM = !mem_stall;
     assign en_MEM_WB = !mem_stall;
-
-    // --- IF Stage (Instruction Fetch) ---
-    logic [31:0] pc, next_pc, pc_plus_4_IF;
-    logic branch_taken;
-    logic [31:0] branch_target;
-
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) pc <= 32'b0;
-        else if (en_PC) pc <= next_pc;
-    end
 
     assign pc_plus_4_IF = pc + 4;
     assign next_pc = branch_taken ? branch_target : pc_plus_4_IF;
@@ -51,7 +90,10 @@ module mips_processor (
     assign imem_req  = 1'b1;
     assign imem_addr = pc;
 
-    logic [31:0] instr_ID, pc_plus_4_ID;
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) pc <= 32'b0;
+        else if (en_PC) pc <= next_pc;
+    end
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst || (flush_ID && !mem_stall)) begin
@@ -63,62 +105,44 @@ module mips_processor (
         end
     end
 
-    // --- ID Stage (Instruction Decode) ---
-    logic [4:0] rs_ID, rt_ID, rd_ID;
-    logic [15:0] imm_ID;
-    logic [31:0] sign_ext_imm_ID;
-    
     assign rs_ID  = instr_ID[25:21];
     assign rt_ID  = instr_ID[20:16];
     assign rd_ID  = instr_ID[15:11];
     assign imm_ID = instr_ID[15:0];
     assign sign_ext_imm_ID = {{16{imm_ID[15]}}, imm_ID};
 
-    logic [5:0] opcode, funct;
     assign opcode = instr_ID[31:26];
     assign funct  = instr_ID[5:0];
 
-    logic reg_dst_ID, alu_src_ID, mem_to_reg_ID, reg_write_ID;
-    logic mem_read_ID, mem_write_ID, branch_ID;
-    logic [2:0] alu_ctrl_ID;
-
-    // Control Unit decoding
     always_comb begin
         reg_dst_ID = 0; alu_src_ID = 0; mem_to_reg_ID = 0; reg_write_ID = 0;
         mem_read_ID = 0; mem_write_ID = 0; branch_ID = 0; alu_ctrl_ID = 3'b000;
         
         case(opcode)
-            6'h00: begin // R-Type
+            6'h00: begin
                 reg_dst_ID = 1; reg_write_ID = 1;
                 case(funct)
-                    6'h20: alu_ctrl_ID = 3'b010; // ADD
-                    6'h22: alu_ctrl_ID = 3'b110; // SUB
-                    6'h24: alu_ctrl_ID = 3'b000; // AND
-                    6'h25: alu_ctrl_ID = 3'b001; // OR
-                    6'h2A: alu_ctrl_ID = 3'b111; // SLT
+                    6'h20: alu_ctrl_ID = 3'b010; 
+                    6'h22: alu_ctrl_ID = 3'b110; 
+                    6'h24: alu_ctrl_ID = 3'b000; 
+                    6'h25: alu_ctrl_ID = 3'b001; 
+                    6'h2A: alu_ctrl_ID = 3'b111; 
                 endcase
             end
-            6'h08: begin // ADDI
+            6'h08: begin
                 alu_src_ID = 1; reg_write_ID = 1; alu_ctrl_ID = 3'b010;
             end
-            6'h23: begin // LW
+            6'h23: begin
                 alu_src_ID = 1; mem_to_reg_ID = 1; reg_write_ID = 1; mem_read_ID = 1; alu_ctrl_ID = 3'b010;
             end
-            6'h2B: begin // SW
+            6'h2B: begin
                 alu_src_ID = 1; mem_write_ID = 1; alu_ctrl_ID = 3'b010;
             end
-            6'h04: begin // BEQ
+            6'h04: begin
                 branch_ID = 1; alu_ctrl_ID = 3'b110;
             end
         endcase
     end
-
-    // Register File (Write on falling edge)
-    logic [31:0] reg_file [0:31];
-    logic [31:0] reg_data1_ID, reg_data2_ID;
-    logic [4:0] dest_reg_WB;
-    logic [31:0] wb_data;
-    logic reg_write_WB;
 
     always_ff @(negedge clk) begin
         if (reg_write_WB && dest_reg_WB != 0 && !mem_stall) begin
@@ -129,15 +153,8 @@ module mips_processor (
     assign reg_data1_ID = (rs_ID == 0) ? 0 : reg_file[rs_ID];
     assign reg_data2_ID = (rt_ID == 0) ? 0 : reg_file[rt_ID];
 
-    // Branch Resolution
     assign branch_target = pc_plus_4_ID + (sign_ext_imm_ID << 2);
     assign branch_taken  = branch_ID && (reg_data1_ID == reg_data2_ID);
-
-    logic [31:0] reg_data1_EX, reg_data2_EX, sign_ext_imm_EX;
-    logic [4:0] rs_EX, rt_EX, rd_EX;
-    logic reg_dst_EX, alu_src_EX, mem_to_reg_EX, reg_write_EX;
-    logic mem_read_EX, mem_write_EX;
-    logic [2:0] alu_ctrl_EX;
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst || (flush_EX && !mem_stall)) begin
@@ -153,13 +170,6 @@ module mips_processor (
         end
     end
 
-    // --- EX Stage (Execute) ---
-    logic [31:0] alu_in1, alu_in2, alu_out_EX;
-    logic [4:0] dest_reg_EX;
-    logic [1:0] forward_A, forward_B;
-    logic [31:0] alu_out_MEM; 
-    logic reg_write_MEM;
-
     always_comb begin
         case(forward_A)
             2'b10: alu_in1 = alu_out_MEM;
@@ -167,7 +177,6 @@ module mips_processor (
             default: alu_in1 = reg_data1_EX;
         endcase
         
-        logic [31:0] fwd_b_val;
         case(forward_B)
             2'b10: fwd_b_val = alu_out_MEM;
             2'b01: fwd_b_val = wb_data;
@@ -189,7 +198,6 @@ module mips_processor (
 
     assign dest_reg_EX = reg_dst_EX ? rd_EX : rt_EX;
 
-    logic [31:0] mem_write_data_EX;
     always_comb begin
         case(forward_B)
             2'b10: mem_write_data_EX = alu_out_MEM;
@@ -197,10 +205,6 @@ module mips_processor (
             default: mem_write_data_EX = reg_data2_EX;
         endcase
     end
-
-    logic [31:0] mem_write_data_MEM;
-    logic [4:0] dest_reg_MEM;
-    logic mem_to_reg_MEM, mem_read_MEM, mem_write_MEM;
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -213,14 +217,10 @@ module mips_processor (
         end
     end
 
-    // --- MEM Stage (Memory Access) ---
     assign dmem_req   = mem_read_MEM || mem_write_MEM;
     assign dmem_we    = mem_write_MEM;
     assign dmem_addr  = alu_out_MEM;
     assign dmem_wdata = mem_write_data_MEM;
-
-    logic [31:0] mem_read_data_WB, alu_out_WB;
-    logic mem_to_reg_WB;
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -235,10 +235,8 @@ module mips_processor (
         end
     end
 
-    // --- WB Stage (Write Back) ---
     assign wb_data = mem_to_reg_WB ? mem_read_data_WB : alu_out_WB;
 
-    // Submodules
     hazard_unit hazard_u (
         .rs_ID(rs_ID), .rt_ID(rt_ID), .rt_EX(rt_EX),
         .mem_read_EX(mem_read_EX), .branch_taken(branch_taken),

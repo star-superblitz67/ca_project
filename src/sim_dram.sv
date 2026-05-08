@@ -12,23 +12,31 @@ module sim_dram (
     output logic         ready
 );
 
-    // Simulated 16KB DRAM block
-    logic [127:0] memory [0:1023];
-
-    // AMAT Latency parameter
+    // ==========================================
+    // DECLARATIONS (MUST BE AT THE TOP FOR ICARUS)
+    // ==========================================
     localparam LATENCY = 5;
     
-    typedef enum logic [1:0] { IDLE, WAIT, RESPOND } state_t;
-    state_t state, next_state;
+    // Replaced enum with localparams
+    localparam IDLE    = 2'b00;
+    localparam WAIT    = 2'b01;
+    localparam RESPOND = 2'b10;
 
+    logic [1:0] state, next_state;
+
+    logic [127:0] memory [0:1023];
     logic [3:0] counter;
     logic [31:0] active_addr;
+    integer i;
 
+    // ==========================================
+    // ASSIGNMENTS & LOGIC
+    // ==========================================
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= IDLE;
             counter <= 0;
-            for (int i=0; i<1024; i++) memory[i] <= 128'h0;
+            for (i=0; i<1024; i=i+1) memory[i] <= 128'h0;
         end else begin
             state <= next_state;
             
@@ -40,7 +48,6 @@ module sim_dram (
         end
     end
 
-    // Access sequence controller
     always_comb begin
         next_state = state;
         ready = 1'b0;
