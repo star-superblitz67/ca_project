@@ -67,14 +67,9 @@ module cache_l1d (
 
     assign hit = cur_valid && (cur_tag == req_tag);
 
-    always_comb begin
-        case(req_word_offset)
-            2'b00: cpu_rdata = cur_data[31:0];
-            2'b01: cpu_rdata = cur_data[63:32];
-            2'b10: cpu_rdata = cur_data[95:64];
-            2'b11: cpu_rdata = cur_data[127:96];
-        endcase
-    end
+    // Word-select mux using a part-select driven by req_word_offset.
+    // Avoids constant-select-in-always_comb issues in Icarus Verilog.
+    assign cpu_rdata = cur_data[32*req_word_offset +: 32];
 
     assign l2_addr  = { (state == WRITE_BACK) ? cur_tag : req_tag, req_idx, 4'b0000 };
     assign l2_wdata = cur_data;
@@ -91,12 +86,11 @@ module cache_l1d (
             
             if (state == COMPARE_TAG && hit && cpu_we) begin
                 dirty_array[req_idx] <= 1'b1;
-                case(req_word_offset)
-                    2'b00: data_array[req_idx][31:0]   <= cpu_wdata;
-                    2'b01: data_array[req_idx][63:32]  <= cpu_wdata;
-                    2'b10: data_array[req_idx][95:64]  <= cpu_wdata;
-                    2'b11: data_array[req_idx][127:96] <= cpu_wdata;
-                endcase
+                // Use a variable part-select to write the correct 32-bit word.
+                // Read-modify-write the full 128-bit line to avoid constant-select
+                // limitation in Icarus Verilog.
+                data_array[req_idx] <= (data_array[req_idx] & ~(128'hFFFFFFFF << (32*req_word_offset)))
+                                     | ({{96{1'b0}}, cpu_wdata} << (32*req_word_offset));
             end
             else if (state == ALLOCATE && l2_ready) begin
                 data_array[req_idx]  <= l2_rdata;

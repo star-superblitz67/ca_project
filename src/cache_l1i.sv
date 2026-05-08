@@ -54,14 +54,9 @@ module cache_l1i (
     assign cur_data = data_array[req_idx];
     assign l2_addr = {req_tag, req_idx, 4'b0000};
 
-    always_comb begin
-        case(req_word_offset)
-            2'b00: cpu_rdata = cur_data[31:0];
-            2'b01: cpu_rdata = cur_data[63:32];
-            2'b10: cpu_rdata = cur_data[95:64];
-            2'b11: cpu_rdata = cur_data[127:96];
-        endcase
-    end
+    // Word-select mux: shift the 128-bit line right by (word_offset * 32) bits, then take low 32.
+    // This avoids constant-select-in-always_comb issues in Icarus Verilog.
+    assign cpu_rdata = cur_data[32*req_word_offset +: 32];
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin

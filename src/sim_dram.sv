@@ -17,12 +17,17 @@ module sim_dram (
 
     // AMAT Latency parameter
     localparam LATENCY = 5;
-    
-    typedef enum logic [1:0] { IDLE, WAIT, RESPOND } state_t;
-    state_t state, next_state;
+
+    // Replaced enum with localparams for Icarus Verilog compatibility
+    localparam IDLE    = 2'b00;
+    localparam WAIT    = 2'b01;
+    localparam RESPOND = 2'b10;
+
+    logic [1:0] state, next_state;
 
     logic [3:0] counter;
     logic [31:0] active_addr;
+    integer i;  // loop variable for reset initialisation
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -44,9 +49,14 @@ module sim_dram (
             else               counter <= 0;
 
             if (state == IDLE && req) active_addr <= addr;
-            if (state == RESPOND && we) memory[active_addr[13:4]] <= wdata;
+            if (state == RESPOND && we) memory[active_idx] <= wdata;
         end
     end
+
+    // Pre-compute memory index from registered active_addr to avoid
+    // constant-select-in-always_comb limitation in Icarus Verilog
+    logic [9:0] active_idx;
+    assign active_idx = active_addr[13:4];
 
     // Access sequence controller
     always_comb begin
@@ -59,7 +69,7 @@ module sim_dram (
             WAIT:    if (counter == LATENCY - 1) next_state = RESPOND;
             RESPOND: begin
                 ready = 1'b1;
-                if (!we) rdata = memory[active_addr[13:4]];
+                if (!we) rdata = memory[active_idx];
                 next_state = IDLE;
             end
             default: next_state = IDLE;
