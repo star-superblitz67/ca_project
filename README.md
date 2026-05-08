@@ -1,145 +1,88 @@
-# MIPS 5-Stage Pipeline with Cache Hierarchy
+Multilevel Cache Hierarchy with 5-Stage MIPS Pipeline
 
-SystemVerilog implementation of a 32-bit MIPS processor with 5-stage pipeline, hazard handling, and 3-level cache hierarchy (L1I, L1D, L2).
+This project implements a fully functional 5-stage MIPS processor pipeline integrated with a multilevel cache hierarchy (Split L1 + Unified L2) in SystemVerilog. The architecture is designed to optimize Average Memory Access Time (AMAT) and efficiently manage memory bandwidth using advanced cache policies and pipeline hazard resolutions.
 
-## Architecture
+Architecture Overview
 
-- **Processor**: 5-stage pipeline (IF→ID→EX→MEM→WB)
-- **L1I Cache**: 1KB, direct-mapped
-- **L1D Cache**: 1KB, 2-way LRU, write-back policy
-- **L2 Cache**: 16KB, 4-way PLRU, unified
-- **DRAM**: 20-cycle latency simulator
-- **Hazard Resolution**: Forwarding unit + load-use detection
-- **Cache Arbitration**: L1D priority over L1I
+1. MIPS 5-Stage Pipeline
 
-## Prerequisites
+The core is a classic 5-stage RISC pipeline:
 
-```bash
-# Windows
-choco install icarus-verilog gtkwave
+IF (Instruction Fetch): Fetches instructions from the L1 Instruction Cache.
 
-# macOS
-brew install icarus-verilog gtkwave
+ID (Instruction Decode): Decodes instructions, reads registers, and resolves branches early.
 
-# Linux
-sudo apt-get install iverilog gtkwave
-```
+EX (Execute): Performs ALU operations.
 
-## Quick Start
+MEM (Memory Access): Reads from or writes to the L1 Data Cache.
 
-```bash
-# Run full system (Phase 5)
-make run
+WB (Write Back): Writes results back to the Register File.
 
-# View waveform
-make wave
+2. Hazard & Forwarding Units
 
-# Individual Components
+To maintain a high Instructions Per Cycle (IPC) without data corruption:
 
-```bash
-make phase0       # Pipeline only (pipeline_sim)
-make phase1       # DRAM simulator (dram_sim)
-make phase2       # L2 cache (l2_sim)
-make phase3       # L1D cache (l1d_sim)
-make phase4       # L1I cache (l1i_sim)
-make phase5       # Full system (mips_sim)
+Forwarding Unit: Implements EX/MEM and MEM/WB forwarding to resolve Read-After-Write (RAW) hazards without stalling.
 
-# View waveforms
-make phase0_wave  # pipeline_waveform.vcd
-make phase1_wave  # dram_waveform.vcd
-make phase2_wave  # l2_waveform.vcd
-make phase3_wave  # l1d_waveform.vcd
-make phase4_wave  # l1i_waveform.vcd
-make phase5_wave  # mips_waveform.vcd
-```
+Hazard Unit: Detects Load-Use hazards to insert a 1-cycle pipeline bubble and flushes the pipeline upon taken branches.
 
-## Manual Compilation
+3. Multilevel Cache Hierarchy
 
-```bash
-# Compile
-iverilog -g2012 -o mips_sim \
-  src/sim_dram.sv src/cache_l2.sv \
-  src/cache_l1i.sv src/cache_l1d.sv \
-  src/forwarding_unit.sv src/hazard_unit.sv \
-  src/mips_processor.sv tb/tb_system.sv
+L1 Instruction Cache (L1i): Direct-mapped, read-only cache optimized for rapid instruction fetching (3-State FSM).
 
-# Run
+L1 Data Cache (L1d): Direct-mapped data cache implementing a Write-Back, Write-Allocate policy.
+
+Unified L2 Cache (L2): A larger, unified cache that arbitrates requests between the L1i and L1d caches, backing them up before querying main memory.
+
+DRAM Simulator: Simulates main memory with an artificial latency penalty to accurately test the cache hierarchy's AMAT improvements.
+
+L1 Data Cache: 4-State FSM (Write-Back, Write-Allocate)
+
+The L1 Data Cache is governed by a precise 4-state Finite State Machine to minimize main memory traffic:
+
+IDLE: The cache waits for a memory request from the CPU.
+
+COMPARE_TAG: The cache checks if the requested address is a hit.
+
+If Hit: The data is read/written. On a write, the dirty bit is set. Transitions back to IDLE.
+
+If Miss: Checks the state of the current block. If the block is valid and dirty, transitions to WRITE_BACK. Otherwise, transitions to ALLOCATE.
+
+WRITE_BACK: Evicts the current dirty block to the L2 cache to preserve data integrity. Once L2 is ready, transitions to ALLOCATE.
+
+ALLOCATE: Fetches the newly requested block from the L2 cache into the L1 cache. Once fetched, transitions back to COMPARE_TAG to successfully resolve the CPU's request.
+
+Global Pipeline Stalling
+
+The processor features a robust global stall mechanism. If either the L1i or L1d cache experiences a miss, a global mem_stall signal is asserted. This cleanly freezes the PC, IF/ID, ID/EX, EX/MEM, and MEM/WB registers, preventing the pipeline from drifting out of sync until the memory hierarchy resolves the request.
+
+Running the Simulation
+
+Prerequisites
+
+Icarus Verilog (iverilog): For compiling the SystemVerilog source files.
+
+GTKWave: For viewing the generated .vcd waveform files.
+
+Compilation & Execution
+
+Run the following commands in your terminal from the project root:
+
+Compile the design:
+
+iverilog -g2012 -o mips_sim src/*.sv tb/tb_system.sv
+
+
+Run the simulation:
+
 vvp mips_sim
 
-# View waveform
-gtkwave mips_waveform.vcd wave.do
-```
 
-## Project Structure
+This will run the testbench and generate a mips_waveform.vcd file.
 
-```
-ca_project/
-├── src/
-│   ├── mips_processor.sv      # 5-stage pipeline
-│   ├── forwarding_unit.sv     # RAW hazard resolution
-│   ├── hazard_unit.sv         # Load-use hazard detection
-│   ├── cache_l1i.sv           # L1I cache
-│   ├── cache_l1d.sv           # L1D cache (2-way LRU, write-back FSM)
-│   ├── cache_l2.sv            # L2 cache (4-way PLRU)
-│   └── sim_dram.sv            # DRAM simulator
-├── tb/
-│   ├── tb_system.sv           # Full system testbench
-│   ├── tb_pipeline.sv         # Phase 0
-│   ├── tb_sim_dram.sv         # Phase 1
-│   ├── tb_cache_l2.sv         # Phase 2
-│   ├── tb_cache_l1d.sv        # Phase 3
-│   └── tb_cache_l1i.sv        # Phase 4
-├── Makefile
-├── wave.do
-└── README.md
-```
+View the Waveforms:
 
-## Key Features
+gtkwave mips_waveform.vcd
 
-- ✅ Forwarding unit for RAW hazard resolution
-- ✅ Load-use hazard detection with pipeline stalls
-- ✅ Write-back, write-allocate cache policy
-- ✅ 3-state FSM in L1D (IDLE, WRITEBACK, ALLOCATE)
-- ✅ L1D priority arbitration to L2
-- ✅ BEQ branch prediction support
-- ✅ 5 verification phases (pipeline → full system)
 
-## Supported Instructions
-
-**R-type**: ADD, SUB, AND, OR, SLT  
-**I-type**: ADDI, LW, SW, BEQ
-
-## Signal Naming Convention
-
-| Signal | Meaning |
-|--------|---------|
-| `if_*` | Instruction Fetch stage |
-| `id_*` | Instruction Decode stage |
-| `ex_*` | Execute stage |
-| `mem_*` | Memory stage |
-| `wb_*` | Write-back stage |
-| `rf[]` | Register file |
-| `*_stall` | Cache miss signal |
-
-## Simulation Output
-
-Running `make run` executes 5 gate checks:
-- Cache hits verification
-- L1I miss handling
-- L1D miss handling
-- L1D priority arbitration
-- Combined hazards + cache stalls
-
-All tests pass with ✓ verification status.
-
-## Build Artifacts
-
-| File | Purpose |
-|------|---------|
-| `mips_sim` | Compiled executable |
-| `mips_waveform.vcd` | Waveform dump |
-| `pipeline_waveform.vcd` - `l1i_waveform.vcd` | Phase waveforms |
-
-## For More Details
-
-See `COMMANDS.txt` for extended command reference and troubleshooting.
+Use the GTKWave GUI to inspect the pipeline registers, hazard signals, and the L1 Data Cache's 4-state FSM transitions.
