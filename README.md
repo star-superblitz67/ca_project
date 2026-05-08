@@ -46,7 +46,7 @@ ca_project/
 ├── Makefile                       # Build configuration
 ├── wave.do                        # GTKWave configuration
 ├── README.md                      # This file
-└── HUMANIZATION_REPORT.md         # Code quality documentation
+
 ```
 
 ## 🚀 Quick Start
@@ -509,7 +509,6 @@ The simulation may not have reset properly. Check:
 
 ## 📚 Additional Resources
 
-- **HUMANIZATION_REPORT.md**: Detailed code quality documentation and variable naming conventions
 - **wave.do**: GTKWave configuration file (signal hierarchy, highlighting, zoom level)
 - **Makefile**: Build automation with targets for all phases
 
@@ -569,7 +568,6 @@ ca_project/
 ├── Makefile                       # Build configuration
 ├── wave.do                        # GTKWave configuration
 ├── README.md                      # This file
-└── HUMANIZATION_REPORT.md         # Code quality documentation
 ```
 
 ## 🚀 Quick Start
@@ -925,8 +923,8 @@ After running `make run`, you'll see:
 
 ## 📖 Additional Documentation
 
-- **HUMANIZATION_REPORT.md**: Details on code quality improvements, bug fixes, and variable naming conventions
 - **wave.do**: GTKWave configuration for signal highlighting and hierarchy setup
+- **Makefile**: Build automation with targets for all phases
 
 ## 🤝 Contributing
 
