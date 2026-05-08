@@ -1,0 +1,535 @@
+$date
+	Fri May 08 17:22:54 2026
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ps
+$end
+$scope module tb_system $end
+$var wire 1 ! imem_req $end
+$var wire 1 " mem_we $end
+$var wire 128 # mem_wdata [127:0] $end
+$var wire 1 $ mem_req $end
+$var wire 1 % mem_ready $end
+$var wire 128 & mem_rdata [127:0] $end
+$var wire 32 ' mem_addr [31:0] $end
+$var wire 1 ( l2_i_req $end
+$var wire 1 ) l2_i_ready $end
+$var wire 128 * l2_i_rdata [127:0] $end
+$var wire 32 + l2_i_addr [31:0] $end
+$var wire 1 , l2_d_we $end
+$var wire 128 - l2_d_wdata [127:0] $end
+$var wire 1 . l2_d_req $end
+$var wire 1 / l2_d_ready $end
+$var wire 128 0 l2_d_rdata [127:0] $end
+$var wire 32 1 l2_d_addr [31:0] $end
+$var wire 1 2 imem_ready $end
+$var wire 32 3 imem_rdata [31:0] $end
+$var wire 32 4 imem_addr [31:0] $end
+$var wire 1 5 dmem_we $end
+$var wire 32 6 dmem_wdata [31:0] $end
+$var wire 1 7 dmem_req $end
+$var wire 1 8 dmem_ready $end
+$var wire 32 9 dmem_rdata [31:0] $end
+$var wire 32 : dmem_addr [31:0] $end
+$var reg 1 ; clk $end
+$var reg 1 < rst $end
+$scope module cpu $end
+$var wire 1 = branch_taken $end
+$var wire 1 ; clk $end
+$var wire 32 > dmem_addr [31:0] $end
+$var wire 1 7 dmem_req $end
+$var wire 32 ? dmem_wdata [31:0] $end
+$var wire 1 5 dmem_we $end
+$var wire 1 @ en_IF_ID $end
+$var wire 1 A en_PC $end
+$var wire 32 B imem_addr [31:0] $end
+$var wire 1 ! imem_req $end
+$var wire 1 C mem_stall $end
+$var wire 1 < rst $end
+$var wire 32 D wb_data [31:0] $end
+$var wire 32 E sign_ext_imm_ID [31:0] $end
+$var wire 5 F rt_ID [4:0] $end
+$var wire 5 G rs_ID [4:0] $end
+$var wire 32 H reg_data2_ID [31:0] $end
+$var wire 32 I reg_data1_ID [31:0] $end
+$var wire 5 J rd_ID [4:0] $end
+$var wire 32 K pc_plus_4_IF [31:0] $end
+$var wire 6 L opcode [5:0] $end
+$var wire 32 M next_pc [31:0] $end
+$var wire 16 N imm_ID [15:0] $end
+$var wire 1 2 imem_ready $end
+$var wire 32 O imem_rdata [31:0] $end
+$var wire 1 P hazard_stall $end
+$var wire 6 Q funct [5:0] $end
+$var wire 2 R forward_B [1:0] $end
+$var wire 2 S forward_A [1:0] $end
+$var wire 1 T flush_ID $end
+$var wire 1 U flush_EX $end
+$var wire 1 V en_MEM_WB $end
+$var wire 1 W en_ID_EX $end
+$var wire 1 X en_EX_MEM $end
+$var wire 1 8 dmem_ready $end
+$var wire 32 Y dmem_rdata [31:0] $end
+$var wire 5 Z dest_reg_EX [4:0] $end
+$var wire 32 [ branch_target [31:0] $end
+$var reg 3 \ alu_ctrl_EX [2:0] $end
+$var reg 3 ] alu_ctrl_ID [2:0] $end
+$var reg 32 ^ alu_in1 [31:0] $end
+$var reg 32 _ alu_in2 [31:0] $end
+$var reg 32 ` alu_out_EX [31:0] $end
+$var reg 32 a alu_out_MEM [31:0] $end
+$var reg 32 b alu_out_WB [31:0] $end
+$var reg 1 c alu_src_EX $end
+$var reg 1 d alu_src_ID $end
+$var reg 1 e branch_ID $end
+$var reg 5 f dest_reg_MEM [4:0] $end
+$var reg 5 g dest_reg_WB [4:0] $end
+$var reg 32 h fwd_b_val [31:0] $end
+$var reg 32 i instr_ID [31:0] $end
+$var reg 1 j mem_read_EX $end
+$var reg 1 k mem_read_ID $end
+$var reg 1 l mem_read_MEM $end
+$var reg 32 m mem_read_data_WB [31:0] $end
+$var reg 1 n mem_to_reg_EX $end
+$var reg 1 o mem_to_reg_ID $end
+$var reg 1 p mem_to_reg_MEM $end
+$var reg 1 q mem_to_reg_WB $end
+$var reg 1 r mem_write_EX $end
+$var reg 1 s mem_write_ID $end
+$var reg 1 t mem_write_MEM $end
+$var reg 32 u mem_write_data_EX [31:0] $end
+$var reg 32 v mem_write_data_MEM [31:0] $end
+$var reg 32 w pc [31:0] $end
+$var reg 32 x pc_plus_4_ID [31:0] $end
+$var reg 5 y rd_EX [4:0] $end
+$var reg 32 z reg_data1_EX [31:0] $end
+$var reg 32 { reg_data2_EX [31:0] $end
+$var reg 1 | reg_dst_EX $end
+$var reg 1 } reg_dst_ID $end
+$var reg 1 ~ reg_write_EX $end
+$var reg 1 !" reg_write_ID $end
+$var reg 1 "" reg_write_MEM $end
+$var reg 1 #" reg_write_WB $end
+$var reg 5 $" rs_EX [4:0] $end
+$var reg 5 %" rt_EX [4:0] $end
+$var reg 32 &" sign_ext_imm_EX [31:0] $end
+$scope module forward_u $end
+$var wire 5 '" rd_MEM [4:0] $end
+$var wire 5 (" rd_WB [4:0] $end
+$var wire 1 "" reg_write_MEM $end
+$var wire 1 #" reg_write_WB $end
+$var wire 5 )" rs_EX [4:0] $end
+$var wire 5 *" rt_EX [4:0] $end
+$var reg 2 +" forward_A [1:0] $end
+$var reg 2 ," forward_B [1:0] $end
+$upscope $end
+$scope module hazard_u $end
+$var wire 1 = branch_taken $end
+$var wire 1 U flush_EX $end
+$var wire 1 T flush_ID $end
+$var wire 1 -" load_use_hazard $end
+$var wire 1 j mem_read_EX $end
+$var wire 5 ." rs_ID [4:0] $end
+$var wire 5 /" rt_EX [4:0] $end
+$var wire 5 0" rt_ID [4:0] $end
+$var wire 1 P stall_pipeline $end
+$upscope $end
+$upscope $end
+$scope module dram $end
+$var wire 1 ; clk $end
+$var wire 1 < rst $end
+$var wire 1 " we $end
+$var wire 128 1" wdata [127:0] $end
+$var wire 1 $ req $end
+$var wire 32 2" addr [31:0] $end
+$var parameter 2 3" IDLE $end
+$var parameter 32 4" LATENCY $end
+$var parameter 2 5" RESPOND $end
+$var parameter 2 6" WAIT $end
+$var reg 32 7" active_addr [31:0] $end
+$var reg 4 8" counter [3:0] $end
+$var reg 2 9" next_state [1:0] $end
+$var reg 128 :" rdata [127:0] $end
+$var reg 1 % ready $end
+$var reg 2 ;" state [1:0] $end
+$var integer 32 <" i [31:0] $end
+$upscope $end
+$scope module l1d $end
+$var wire 1 ; clk $end
+$var wire 32 =" cpu_addr [31:0] $end
+$var wire 1 7 cpu_req $end
+$var wire 32 >" cpu_wdata [31:0] $end
+$var wire 1 5 cpu_we $end
+$var wire 128 ?" cur_data [127:0] $end
+$var wire 1 @" cur_dirty $end
+$var wire 21 A" cur_tag [20:0] $end
+$var wire 1 B" cur_valid $end
+$var wire 1 C" hit $end
+$var wire 128 D" l2_wdata [127:0] $end
+$var wire 1 < rst $end
+$var wire 2 E" req_word_offset [1:0] $end
+$var wire 21 F" req_tag [20:0] $end
+$var wire 7 G" req_idx [6:0] $end
+$var wire 1 / l2_ready $end
+$var wire 128 H" l2_rdata [127:0] $end
+$var wire 32 I" l2_addr [31:0] $end
+$var parameter 2 J" ALLOCATE $end
+$var parameter 2 K" COMPARE_TAG $end
+$var parameter 2 L" IDLE $end
+$var parameter 32 M" INDEX_BITS $end
+$var parameter 32 N" OFFSET_BITS $end
+$var parameter 32 O" TAG_BITS $end
+$var parameter 2 P" WRITE_BACK $end
+$var reg 32 Q" cpu_rdata [31:0] $end
+$var reg 1 8 cpu_ready $end
+$var reg 1 . l2_req $end
+$var reg 1 , l2_we $end
+$var reg 2 R" next_state [1:0] $end
+$var reg 2 S" state [1:0] $end
+$var integer 32 T" i [31:0] $end
+$upscope $end
+$scope module l1i $end
+$var wire 1 ; clk $end
+$var wire 32 U" cpu_addr [31:0] $end
+$var wire 1 ! cpu_req $end
+$var wire 128 V" cur_data [127:0] $end
+$var wire 1 W" hit $end
+$var wire 1 < rst $end
+$var wire 2 X" req_word_offset [1:0] $end
+$var wire 21 Y" req_tag [20:0] $end
+$var wire 7 Z" req_idx [6:0] $end
+$var wire 1 ) l2_ready $end
+$var wire 128 [" l2_rdata [127:0] $end
+$var wire 32 \" l2_addr [31:0] $end
+$var parameter 2 ]" ALLOCATE $end
+$var parameter 2 ^" COMPARE_TAG $end
+$var parameter 2 _" IDLE $end
+$var parameter 32 `" INDEX_BITS $end
+$var parameter 32 a" OFFSET_BITS $end
+$var parameter 32 b" TAG_BITS $end
+$var reg 32 c" cpu_rdata [31:0] $end
+$var reg 1 2 cpu_ready $end
+$var reg 1 ( l2_req $end
+$var reg 2 d" next_state [1:0] $end
+$var reg 2 e" state [1:0] $end
+$var integer 32 f" i [31:0] $end
+$upscope $end
+$scope module l2 $end
+$var wire 1 ; clk $end
+$var wire 128 g" cur_data [127:0] $end
+$var wire 1 h" cur_dirty $end
+$var wire 20 i" cur_tag [19:0] $end
+$var wire 1 j" cur_valid $end
+$var wire 1 k" hit $end
+$var wire 32 l" l1d_addr [31:0] $end
+$var wire 128 m" l1d_rdata [127:0] $end
+$var wire 1 . l1d_req $end
+$var wire 128 n" l1d_wdata [127:0] $end
+$var wire 1 , l1d_we $end
+$var wire 32 o" l1i_addr [31:0] $end
+$var wire 128 p" l1i_rdata [127:0] $end
+$var wire 1 ( l1i_req $end
+$var wire 128 q" mem_rdata [127:0] $end
+$var wire 1 % mem_ready $end
+$var wire 128 r" mem_wdata [127:0] $end
+$var wire 1 < rst $end
+$var wire 20 s" req_tag [19:0] $end
+$var wire 8 t" req_idx [7:0] $end
+$var wire 32 u" mem_addr [31:0] $end
+$var wire 1 v" active_we $end
+$var wire 128 w" active_wdata [127:0] $end
+$var wire 1 x" active_req $end
+$var wire 32 y" active_addr [31:0] $end
+$var parameter 3 z" ALLOCATE $end
+$var parameter 3 {" COMPARE_TAG $end
+$var parameter 3 |" IDLE $end
+$var parameter 32 }" INDEX_BITS $end
+$var parameter 32 ~" OFFSET_BITS $end
+$var parameter 32 !# TAG_BITS $end
+$var parameter 3 "# WRITE_BACK $end
+$var reg 1 / l1d_ready $end
+$var reg 1 ) l1i_ready $end
+$var reg 1 $ mem_req $end
+$var reg 1 " mem_we $end
+$var reg 3 ## next_state [2:0] $end
+$var reg 1 $# serving_l1d $end
+$var reg 3 %# state [2:0] $end
+$var integer 32 &# i [31:0] $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+b11 "#
+b10100 !#
+b100 ~"
+b1000 }"
+b0 |"
+b10 {"
+b100 z"
+b10101 b"
+b100 a"
+b111 `"
+b0 _"
+b1 ^"
+b10 ]"
+b10 P"
+b10101 O"
+b100 N"
+b111 M"
+b0 L"
+b1 K"
+b11 J"
+b1 6"
+b10 5"
+b101 4"
+b0 3"
+$end
+#0
+$dumpvars
+b100000000 &#
+b0 %#
+0$#
+b0 ##
+b0 y"
+0x"
+b0 w"
+0v"
+b0 u"
+b0 t"
+b0 s"
+bx r"
+b0 q"
+bx p"
+b0 o"
+bx n"
+bx m"
+b0 l"
+0k"
+0j"
+bx i"
+0h"
+bx g"
+b10000000 f"
+b0 e"
+b1 d"
+bx c"
+b0 \"
+bx ["
+b0 Z"
+b0 Y"
+b0 X"
+0W"
+bx V"
+b0 U"
+b10000000 T"
+b0 S"
+b0 R"
+bx Q"
+b0 I"
+bx H"
+b0 G"
+b0 F"
+b0 E"
+bx D"
+0C"
+0B"
+bx A"
+0@"
+bx ?"
+b0 >"
+b0 ="
+b10000000000 <"
+b0 ;"
+b0 :"
+b0 9"
+b0 8"
+bx 7"
+b0 2"
+bx 1"
+b0 0"
+b0 /"
+b0 ."
+0-"
+b0 ,"
+b0 +"
+b0 *"
+b0 )"
+b0 ("
+b0 '"
+b0 &"
+b0 %"
+b0 $"
+0#"
+0""
+1!"
+0~
+1}
+0|
+b0 {
+b0 z
+b0 y
+b0 x
+b0 w
+b0 v
+b0 u
+0t
+0s
+0r
+0q
+0p
+0o
+0n
+b0 m
+0l
+0k
+0j
+b0 i
+b0 h
+b0 g
+b0 f
+0e
+0d
+0c
+b0 b
+b0 a
+b0 `
+b0 _
+b0 ^
+b0 ]
+b0 \
+b0 [
+b0 Z
+bx Y
+0X
+0W
+0V
+0U
+0T
+b0 S
+b0 R
+b0 Q
+0P
+bx O
+b0 N
+b100 M
+b0 L
+b100 K
+b0 J
+b0 I
+b0 H
+b0 G
+b0 F
+b0 E
+b0 D
+1C
+b0 B
+0A
+0@
+b0 ?
+b0 >
+0=
+1<
+0;
+b0 :
+bx 9
+08
+07
+b0 6
+05
+b0 4
+bx 3
+02
+b0 1
+bx 0
+0/
+0.
+bx -
+0,
+b0 +
+bx *
+0)
+0(
+b0 '
+b0 &
+0%
+0$
+bx #
+0"
+1!
+$end
+#5000
+b10000000000 <"
+b100000000 &#
+b10000000 T"
+b10000000 f"
+1;
+#10000
+0;
+#15000
+b10000000 f"
+b10000000 T"
+b100000000 &#
+b10000000000 <"
+1;
+#20000
+0;
+0<
+#25000
+b10 d"
+b1 e"
+1;
+#30000
+0;
+#35000
+b10 ##
+1x"
+1(
+b10 e"
+1;
+#40000
+0;
+#45000
+b100 ##
+b10 %#
+1;
+#50000
+0;
+#55000
+b1 9"
+1$
+b100 %#
+1;
+#60000
+0;
+#65000
+b0 7"
+b1 ;"
+1;
+#70000
+0;
+#75000
+b1 8"
+1;
+#80000
+0;
+#85000
+b10 8"
+1;
+#90000
+0;
+#95000
+b11 8"
+1;
+#100000
+0;
+#105000
+b10 9"
+b100 8"
+1;
+#110000
+0;
+#115000
