@@ -1,78 +1,91 @@
 `timescale 1ns/1ps
-
-/**
- * L1 Instruction Cache (Fixed)
- * Features:
- * - 4 Lines, Direct Mapped, 128-bit block size.
- * - Robust Ready Logic for single-cycle pipeline recovery.
- */
+// ============================================================
+//  L1 Instruction Cache  –  Direct-mapped, 4 lines, 16B/line
+//  Read-only (no write path needed).
+//  On miss: enters REFILL, requests the 128-bit block from L2.
+// ============================================================
 module cache_l1i(
-    input logic clk,
-    input logic rst,
-    input logic cpu_req,
-    input logic [31:0] cpu_addr,
+    input  logic        clk,
+    input  logic        rst,
+    // CPU (processor) side
+    input  logic        cpu_req,
+    input  logic [31:0] cpu_addr,
     output logic [31:0] cpu_rdata,
-    output logic cpu_ready,
-
-    output logic l2_req,
+    output logic        cpu_ready,
+    // L2 side
+    output logic        l2_req,
     output logic [31:0] l2_addr,
-    input logic [127:0] l2_rdata,
-    input logic l2_ready
+    input  logic [127:0] l2_rdata,
+    input  logic        l2_ready
 );
 
-    logic valid [0:3];
-    logic [25:0] tags [0:3];
-    logic [127:0] data [0:3];
+    // Cache storage: 4 lines, each 128 bits wide
+    logic         valid [0:3];
+    logic [25:0]  tags  [0:3];
+    logic [127:0] data  [0:3];
 
-    logic [1:0] index = cpu_addr[5:4];
-    logic [25:0] tag = cpu_addr[31:6];
-    logic [1:0] word_offset = cpu_addr[3:2];
+    // Address breakdown: [31:6]=tag, [5:4]=index, [3:0]=block-offset
+    logic [1:0]  idx;
+    logic [25:0] tag;
+    assign idx = cpu_addr[5:4];
+    assign tag = cpu_addr[31:6];
 
+    // Hit detection
     logic hit;
-    assign hit = valid[index] && (tags[index] == tag);
+    assign hit = valid[idx] && (tags[idx] == tag);
 
-    assign cpu_rdata = (word_offset == 2'b00) ? data[index][31:0] :
-                       (word_offset == 2'b01) ? data[index][63:32] :
-                       (word_offset == 2'b10) ? data[index][95:64] :
-                                                data[index][127:96];
-
-    typedef enum logic {IDLE, REFILL} state_t;
-    state_t state, next_state;
+    // State machine
+    typedef enum logic [0:0] {IDLE, REFILL} state_t;
+    state_t state;
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= IDLE;
-            for(int i=0; i<4; i++) valid[i] <= 0;
+            valid[0] <= 1'b0; valid[1] <= 1'b0;
+            valid[2] <= 1'b0; valid[3] <= 1'b0;
         end else begin
-            state <= next_state;
-            if (state == REFILL && l2_ready) begin
-                valid[index] <= 1;
-                tags[index] <= tag;
-                data[index] <= l2_rdata;
-            end
+            case (state)
+                IDLE: begin
+                    if (cpu_req && !hit)
+                        state <= REFILL;
+                end
+                REFILL: begin
+                    if (l2_ready) begin
+                        data[idx]  <= l2_rdata;
+                        tags[idx]  <= tag;
+                        valid[idx] <= 1'b1;
+                        state      <= IDLE;
+                    end
+                end
+                default: state <= IDLE;
+            endcase
         end
     end
 
+    // Output mux: serve from refill data immediately on l2_ready
+    // to avoid an extra stall cycle.
+    logic [127:0] serve_block;
     always_comb begin
-        next_state = state;
-        l2_req = 0;
-        l2_addr = {tag, index, 4'b0000};
-        
-        // Assert ready on hit or when refill cycle finishes
-        cpu_ready = (state == IDLE && hit) || (state == REFILL && l2_ready);
-
-        case(state)
-            IDLE: begin
-                if (cpu_req && !hit) begin
-                    l2_req = 1;
-                    next_state = REFILL;
-                end
-            end
-            REFILL: begin
-                l2_req = 1;
-                if (l2_ready) next_state = IDLE;
-            end
-        endcase
+        if (state == REFILL && l2_ready)
+            serve_block = l2_rdata;
+        else
+            serve_block = data[idx];
     end
+
+    // Word extraction: word offset = cpu_addr[3:2]
+    // Use explicit mux to avoid Icarus part-select limitations
+    assign cpu_rdata = (cpu_addr[3:2] == 2'd0) ? serve_block[31:0]   :
+                       (cpu_addr[3:2] == 2'd1) ? serve_block[63:32]  :
+                       (cpu_addr[3:2] == 2'd2) ? serve_block[95:64]  :
+                                                 serve_block[127:96];
+
+    assign cpu_ready = (state == IDLE   && cpu_req && hit) ||
+                       (state == REFILL && l2_ready);
+
+    assign l2_req  = (state == REFILL) ||
+                     (state == IDLE && cpu_req && !hit);
+
+    // Always request the full aligned 16-byte block
+    assign l2_addr = {tag, idx, 4'b0000};
 
 endmodule

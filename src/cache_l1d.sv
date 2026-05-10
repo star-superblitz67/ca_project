@@ -1,110 +1,126 @@
 `timescale 1ns/1ps
-
-/**
- * L1 Data Cache (Fixed)
- * Features:
- * - 4 Lines, Direct Mapped, 128-bit block size.
- * - Write-Through Policy.
- * - Robust Ready Logic to break pipeline stalls during memory ops.
- */
+// ============================================================
+//  L1 Data Cache  –  Direct-mapped, 4 lines, 16B/line
+//  Write-through (no write-allocate):
+//    HIT  + WRITE → write word straight to L2 (WRITE_THROUGH)
+//    MISS + READ  → fetch block from L2 (REFILL)
+//    HIT  + READ  → serve from cache immediately
+// ============================================================
 module cache_l1d(
-    input logic clk,
-    input logic rst,
-    input logic cpu_req,
-    input logic cpu_we,
-    input logic [31:0] cpu_addr,
-    input logic [31:0] cpu_wdata,
+    input  logic        clk,
+    input  logic        rst,
+    // CPU (processor) side
+    input  logic        cpu_req,
+    input  logic        cpu_we,
+    input  logic [31:0] cpu_addr,
+    input  logic [31:0] cpu_wdata,
     output logic [31:0] cpu_rdata,
-    output logic cpu_ready,
-
-    output logic l2_req,
-    output logic l2_we,
+    output logic        cpu_ready,
+    // L2 side
+    output logic        l2_req,
+    output logic        l2_we,
     output logic [31:0] l2_addr,
     output logic [127:0] l2_wdata,
-    input logic [127:0] l2_rdata,
-    input logic l2_ready
+    input  logic [127:0] l2_rdata,
+    input  logic        l2_ready
 );
 
-    logic valid [0:3];
-    logic [25:0] tags [0:3];
-    logic [127:0] data [0:3];
+    // Cache storage: 4 lines, each 128 bits
+    logic         valid [0:3];
+    logic [25:0]  tags  [0:3];
+    logic [127:0] data  [0:3];
 
-    logic [1:0] index = cpu_addr[5:4];
-    logic [25:0] tag = cpu_addr[31:6];
-    logic [1:0] word_offset = cpu_addr[3:2];
+    // Address breakdown
+    logic [1:0]  idx;
+    logic [25:0] tag;
+    assign idx = cpu_addr[5:4];
+    assign tag = cpu_addr[31:6];
 
     logic hit;
-    assign hit = valid[index] && (tags[index] == tag);
+    assign hit = valid[idx] && (tags[idx] == tag);
 
-    assign cpu_rdata = (word_offset == 2'b00) ? data[index][31:0] :
-                       (word_offset == 2'b01) ? data[index][63:32] :
-                       (word_offset == 2'b10) ? data[index][95:64] :
-                                                data[index][127:96];
-
+    // State machine
     typedef enum logic [1:0] {IDLE, REFILL, WRITE_THROUGH} state_t;
-    state_t state, next_state;
+    state_t state;
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= IDLE;
-            for(int i=0; i<4; i++) valid[i] <= 0;
+            valid[0] <= 1'b0; valid[1] <= 1'b0;
+            valid[2] <= 1'b0; valid[3] <= 1'b0;
         end else begin
-            state <= next_state;
-            if (state == REFILL && l2_ready) begin
-                valid[index] <= 1;
-                tags[index] <= tag;
-                data[index] <= l2_rdata;
-            end else if (state == WRITE_THROUGH && l2_ready) begin
-                if (hit) begin
-                    // Update cache as well (Write-through)
-                    case(word_offset)
-                        2'b00: data[index][31:0]   <= cpu_wdata;
-                        2'b01: data[index][63:32]  <= cpu_wdata;
-                        2'b10: data[index][95:64]  <= cpu_wdata;
-                        2'b11: data[index][127:96] <= cpu_wdata;
-                    endcase
+            case (state)
+                IDLE: begin
+                    if (cpu_req) begin
+                        if (cpu_we)
+                            state <= WRITE_THROUGH;
+                        else if (!hit)
+                            state <= REFILL;
+                        // hit+read → stay IDLE, cpu_ready asserted combinatorially
+                    end
                 end
-            end
+
+                REFILL: begin
+                    if (l2_ready) begin
+                        data[idx]  <= l2_rdata;
+                        tags[idx]  <= tag;
+                        valid[idx] <= 1'b1;
+                        state      <= IDLE;
+                    end
+                end
+
+                WRITE_THROUGH: begin
+                    if (l2_ready) begin
+                        // Update cache line if we have it (keep coherent)
+                        if (hit) begin
+                            case (cpu_addr[3:2])
+                                2'd0: data[idx][31:0]   <= cpu_wdata;
+                                2'd1: data[idx][63:32]  <= cpu_wdata;
+                                2'd2: data[idx][95:64]  <= cpu_wdata;
+                                2'd3: data[idx][127:96] <= cpu_wdata;
+                            endcase
+                        end
+                        state <= IDLE;
+                    end
+                end
+
+                default: state <= IDLE;
+            endcase
         end
     end
 
+    // Read data output: serve from L2 immediately on refill completion
+    logic [127:0] serve_block;
     always_comb begin
-        next_state = state;
-        l2_req = 0;
-        l2_we = 0;
-        l2_addr = {tag, index, 4'b0000};
-        l2_wdata = {4{cpu_wdata}}; // Broadcaster
-
-        // CRITICAL: Assert cpu_ready when the cycle finishes to let pipeline advance
-        cpu_ready = (state == IDLE && hit && !cpu_we) || 
-                    (state == WRITE_THROUGH && l2_ready) ||
-                    (state == REFILL && l2_ready);
-
-        case(state)
-            IDLE: begin
-                if (cpu_req) begin
-                    if (cpu_we) begin
-                        l2_req = 1;
-                        l2_we = 1;
-                        l2_addr = cpu_addr;
-                        next_state = WRITE_THROUGH;
-                    end else if (!hit) begin
-                        l2_req = 1;
-                        next_state = REFILL;
-                    end
-                end
-            end
-            REFILL: begin
-                l2_req = 1;
-                if (l2_ready) next_state = IDLE;
-            end
-            WRITE_THROUGH: begin
-                l2_req = 1;
-                l2_we = 1;
-                l2_addr = cpu_addr;
-                if (l2_ready) next_state = IDLE;
-            end
-        endcase
+        if (state == REFILL && l2_ready)
+            serve_block = l2_rdata;
+        else
+            serve_block = data[idx];
     end
+
+    // Word extraction mux (Icarus-compatible)
+    assign cpu_rdata = (cpu_addr[3:2] == 2'd0) ? serve_block[31:0]   :
+                       (cpu_addr[3:2] == 2'd1) ? serve_block[63:32]  :
+                       (cpu_addr[3:2] == 2'd2) ? serve_block[95:64]  :
+                                                 serve_block[127:96];
+
+    // cpu_ready: asserted when access completes
+    assign cpu_ready = (state == IDLE         && cpu_req && !cpu_we && hit) ||
+                       (state == REFILL        && l2_ready) ||
+                       (state == WRITE_THROUGH && l2_ready);
+
+    // L2 interface
+    // l2_req: active whenever we need L2
+    assign l2_req   = (state == REFILL) ||
+                      (state == WRITE_THROUGH) ||
+                      (state == IDLE && cpu_req && !cpu_we && !hit);
+
+    assign l2_we    = (state == WRITE_THROUGH);
+
+    // For writes: send word address; for reads: send block-aligned address
+    assign l2_addr  = (state == WRITE_THROUGH) ? cpu_addr : {tag, idx, 4'b0000};
+
+    // Write data: replicate word into 128-bit bus (DRAM picks the right word)
+    assign l2_wdata = {cpu_wdata, cpu_wdata, cpu_wdata, cpu_wdata};
 
 endmodule
