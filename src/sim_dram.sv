@@ -13,6 +13,9 @@ module sim_dram(
 logic [127:0] memory [0:255];
 logic [3:0] counter;
 logic waiting;
+logic dbg_dram_busy;
+
+assign dbg_dram_busy = waiting;
 
 initial begin
 

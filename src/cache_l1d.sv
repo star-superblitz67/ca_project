@@ -20,6 +20,11 @@ module cache_l1d(
 
 logic [1:0] state;
 logic dirty_bit;
+logic dbg_cache_miss;
+logic dbg_waiting;
+
+assign dbg_cache_miss = cpu_req && !l2_ready;
+assign dbg_waiting = !cpu_ready;
 
 assign l2_req = cpu_req;
 assign l2_we = cpu_we;

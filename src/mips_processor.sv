@@ -48,8 +48,12 @@ assign dbg_r6 = reg_file[6];
 assign imem_req = !rst;
 assign imem_addr = pc;
 
-assign dmem_req = 0;
-assign dmem_we = 0;
+assign dmem_req =
+    (instr[31:26] == 6'h23) ||
+    (instr[31:26] == 6'h2B);
+
+assign dmem_we =
+    (instr[31:26] == 6'h2B);
 assign dmem_addr = 0;
 assign dmem_wdata = 0;
 

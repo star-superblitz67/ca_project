@@ -25,6 +25,11 @@ module cache_l2(
 );
 
 logic [1:0] state;
+logic dbg_l1i_active;
+logic dbg_l1d_active;
+
+assign dbg_l1i_active = l1i_req;
+assign dbg_l1d_active = l1d_req;
 
 assign mem_req = l1i_req || l1d_req;
 assign mem_we = l1d_we;
