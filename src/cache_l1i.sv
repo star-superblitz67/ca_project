@@ -1,9 +1,6 @@
 `timescale 1ns/1ps
-// ============================================================
-//  L1 Instruction Cache  –  Direct-mapped, 4 lines, 16B/line
-//  Read-only (no write path needed).
-//  On miss: enters REFILL, requests the 128-bit block from L2.
-// ============================================================
+// L1 Instruction Cache – direct-mapped, 4 lines, 16B/line, read-only.
+// On miss: enters REFILL and requests the 128-bit block from L2.
 module cache_l1i(
     input  logic        clk,
     input  logic        rst,
@@ -34,7 +31,6 @@ module cache_l1i(
     logic hit;
     assign hit = valid[idx] && (tags[idx] == tag);
 
-    // State machine
     typedef enum logic [0:0] {IDLE, REFILL} state_t;
     state_t state;
 
@@ -62,8 +58,7 @@ module cache_l1i(
         end
     end
 
-    // Output mux: serve from refill data immediately on l2_ready
-    // to avoid an extra stall cycle.
+    // Serve from refill data immediately on l2_ready to avoid an extra stall cycle
     logic [127:0] serve_block;
     always_comb begin
         if (state == REFILL && l2_ready)
@@ -72,8 +67,7 @@ module cache_l1i(
             serve_block = data[idx];
     end
 
-    // Word extraction: word offset = cpu_addr[3:2]
-    // Use explicit mux to avoid Icarus part-select limitations
+    // Word extraction: word offset = cpu_addr[3:2]; explicit mux for Icarus compatibility
     assign cpu_rdata = (cpu_addr[3:2] == 2'd0) ? serve_block[31:0]   :
                        (cpu_addr[3:2] == 2'd1) ? serve_block[63:32]  :
                        (cpu_addr[3:2] == 2'd2) ? serve_block[95:64]  :

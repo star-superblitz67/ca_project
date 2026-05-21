@@ -1,11 +1,6 @@
 `timescale 1ns/1ps
-// ============================================================
-//  L2 Unified Cache Arbiter
-//  Simple priority arbiter: L1D > L1I (data wins on conflict).
-//  Serves one request at a time. Forwards directly to DRAM.
-//  (L2 is a pass-through arbiter in this educational design;
-//   a real L2 would have its own tag/data arrays.)
-// ============================================================
+// L2 Unified Cache Arbiter – priority arbiter: L1D > L1I.
+// Serves one request at a time; pass-through to DRAM (no tag/data arrays).
 module cache_l2(
     input  logic        clk,
     input  logic        rst,
@@ -30,8 +25,7 @@ module cache_l2(
     input  logic        mem_ready
 );
 
-    // Arbitration: track which L1 is currently being served
-    // to prevent switching mid-transaction.
+    // Track which L1 is being served to prevent switching mid-transaction
     typedef enum logic [1:0] {ARB_IDLE, ARB_SERVE_D, ARB_SERVE_I} arb_t;
     arb_t arb_state;
 
@@ -60,7 +54,6 @@ module cache_l2(
         end
     end
 
-    // Combinational outputs based on arbiter state
     always_comb begin
         // Safe defaults
         mem_req   = 1'b0;

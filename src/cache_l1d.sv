@@ -1,11 +1,8 @@
 `timescale 1ns/1ps
-// ============================================================
-//  L1 Data Cache  –  Direct-mapped, 4 lines, 16B/line
-//  Write-through (no write-allocate):
-//    HIT  + WRITE → write word straight to L2 (WRITE_THROUGH)
-//    MISS + READ  → fetch block from L2 (REFILL)
-//    HIT  + READ  → serve from cache immediately
-// ============================================================
+// L1 Data Cache – direct-mapped, 4 lines, 16B/line, write-through / no write-allocate.
+//   HIT  + WRITE → write word straight to L2 (WRITE_THROUGH)
+//   MISS + READ  → fetch block from L2 (REFILL)
+//   HIT  + READ  → serve from cache immediately
 module cache_l1d(
     input  logic        clk,
     input  logic        rst,
@@ -30,7 +27,7 @@ module cache_l1d(
     logic [25:0]  tags  [0:3];
     logic [127:0] data  [0:3];
 
-    // Address breakdown
+    // Address breakdown: [31:6]=tag, [5:4]=index, [3:0]=block-offset
     logic [1:0]  idx;
     logic [25:0] tag;
     assign idx = cpu_addr[5:4];
@@ -39,7 +36,6 @@ module cache_l1d(
     logic hit;
     assign hit = valid[idx] && (tags[idx] == tag);
 
-    // State machine
     typedef enum logic [1:0] {IDLE, REFILL, WRITE_THROUGH} state_t;
     state_t state;
 
@@ -89,7 +85,7 @@ module cache_l1d(
         end
     end
 
-    // Read data output: serve from L2 immediately on refill completion
+    // Serve from L2 immediately on refill completion to avoid an extra stall cycle
     logic [127:0] serve_block;
     always_comb begin
         if (state == REFILL && l2_ready)
@@ -109,7 +105,6 @@ module cache_l1d(
                        (state == REFILL        && l2_ready) ||
                        (state == WRITE_THROUGH && l2_ready);
 
-    // L2 interface
     // l2_req: active whenever we need L2
     assign l2_req   = (state == REFILL) ||
                       (state == WRITE_THROUGH) ||

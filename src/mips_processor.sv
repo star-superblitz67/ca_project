@@ -1,10 +1,6 @@
 `timescale 1ns/1ps
 
-// ============================================================
-//  Harris & Harris 5-Stage MIPS Pipeline
-//  With Forwarding, Load-Use Stalls, Branch Flush,
-//  and L1I/L1D/L2/DRAM cache hierarchy.
-// ============================================================
+// Harris & Harris 5-stage MIPS pipeline with forwarding, stalls, branch flush, and cache hierarchy.
 module mips_processor(
     input  logic        clk,
     input  logic        rst,
@@ -20,40 +16,31 @@ module mips_processor(
     output logic [31:0] dmem_wdata,
     input  logic [31:0] dmem_rdata,
     input  logic        dmem_ready,
-    // GTKWave Debug: expose key registers
+    // GTKWave debug: expose key registers
     output logic [31:0] dbg_r1, dbg_r2, dbg_r3, dbg_r4, dbg_r5, dbg_r6, dbg_r7, dbg_r8, dbg_r9
 );
 
-    // ----------------------------------------------------------------
-    // Stall / Enable Logic
-    // ----------------------------------------------------------------
-    // imem_stall: waiting for L1I to supply an instruction
-    // dmem_stall: waiting for L1D to complete a load/store
+    // imem_stall: waiting for L1I; dmem_stall: waiting for L1D
     logic imem_stall, dmem_stall, cache_stall;
-    logic stall_haz;                         // load-use hazard stall
+    logic stall_haz;    // load-use hazard stall
     logic branch_taken;
 
-    // imem_stall: only active when we are actually requesting and not ready
     assign imem_stall  = imem_req  && !imem_ready;
-    // dmem_stall: only active when a mem access is in-flight
     assign dmem_stall  = dmem_req  && !dmem_ready;
     assign cache_stall = imem_stall || dmem_stall;
 
     // Global freeze: any stall stops the entire pipeline advance
-    // (stall_haz inserts a bubble into EX, so it's handled separately)
     logic pipe_stall;
     assign pipe_stall = cache_stall || stall_haz;
 
-    // ----------------------------------------------------------------
-    // Register File  (32 x 32-bit)
-    // ----------------------------------------------------------------
+    // Register File (32 x 32-bit)
     logic [31:0] reg_file [0:31];
 
-    // WB data mux
     logic [31:0] mem_wb_alu_out, mem_wb_read_data;
     logic [4:0]  mem_wb_write_reg;
     logic        mem_wb_regwrite, mem_wb_memtoreg;
 
+    // WB data mux
     logic [31:0] wb_data;
     assign wb_data = mem_wb_memtoreg ? mem_wb_read_data : mem_wb_alu_out;
 
@@ -69,17 +56,13 @@ module mips_processor(
         end
     end
 
-    // ----------------------------------------------------------------
-    // IF Stage  – Program Counter
-    // ----------------------------------------------------------------
+    // IF Stage – Program Counter
     logic [31:0] pc_reg;
     logic [31:0] branch_target;
 
-    // Only request once out of reset
     assign imem_req  = !rst;
     assign imem_addr = pc_reg;
 
-    // PC update – next cycle value
     always_ff @(posedge clk or posedge rst) begin
         if (rst)
             pc_reg <= 32'd0;
@@ -90,12 +73,10 @@ module mips_processor(
         else if (stall_haz)
             pc_reg <= pc_reg;           // load-use: hold PC
         else
-            pc_reg <= pc_reg + 32'd4;  // normal advance
+            pc_reg <= pc_reg + 32'd4;
     end
 
-    // ----------------------------------------------------------------
     // IF/ID Pipeline Register
-    // ----------------------------------------------------------------
     logic [31:0] if_id_pc, if_id_instr;
 
     always_ff @(posedge clk or posedge rst) begin
@@ -115,16 +96,12 @@ module mips_processor(
             if_id_pc    <= if_id_pc;
             if_id_instr <= if_id_instr;
         end else begin
-            // Normal: latch the fetched instruction
-            // imem_ready is guaranteed true here (no imem_stall and no cache_stall)
-            if_id_pc    <= pc_reg;        // PC of the fetched instruction
+            if_id_pc    <= pc_reg;
             if_id_instr <= imem_rdata;
         end
     end
 
-    // ----------------------------------------------------------------
-    // ID Stage  – Decode + Register Read
-    // ----------------------------------------------------------------
+    // ID Stage – Decode + Register Read
     logic [5:0] id_opcode, id_funct;
     logic [4:0] id_rs_addr, id_rt_addr, id_rd_addr;
     logic [31:0] id_imm_ext;
@@ -135,7 +112,6 @@ module mips_processor(
     assign id_rt_addr = if_id_instr[20:16];
     assign id_rd_addr = if_id_instr[15:11];
 
-    // Control signals
     logic ctrl_regwrite, ctrl_memtoreg, ctrl_memwrite, ctrl_memread;
     logic ctrl_alusrc, ctrl_regdst, ctrl_branch, ctrl_bne;
     logic [2:0] ctrl_aluctrl;
@@ -210,9 +186,7 @@ module mips_processor(
                        (mem_wb_regwrite && mem_wb_write_reg == id_rt_addr) ? wb_data :
                        reg_file[id_rt_addr];
 
-    // ----------------------------------------------------------------
     // ID/EX Pipeline Register
-    // ----------------------------------------------------------------
     logic [31:0] id_ex_pc, id_ex_rs_val, id_ex_rt_val, id_ex_imm;
     logic [4:0]  id_ex_rs, id_ex_rt, id_ex_rd;
     logic        id_ex_regwrite, id_ex_memtoreg, id_ex_memwrite, id_ex_memread;
@@ -277,9 +251,7 @@ module mips_processor(
         end
     end
 
-    // ----------------------------------------------------------------
-    // EX Stage  – ALU + Forwarding
-    // ----------------------------------------------------------------
+    // EX Stage – ALU + Forwarding
     logic [1:0] forward_a, forward_b;
 
     // EX/MEM register (needed by forwarding unit)
@@ -327,9 +299,7 @@ module mips_processor(
     logic [4:0] ex_write_reg;
     assign ex_write_reg = id_ex_regdst ? id_ex_rd : id_ex_rt;
 
-    // ----------------------------------------------------------------
     // EX/MEM Pipeline Register
-    // ----------------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             ex_mem_alu_out   <= 32'd0;
@@ -361,17 +331,13 @@ module mips_processor(
         end
     end
 
-    // ----------------------------------------------------------------
-    // MEM Stage  – Data Memory Interface
-    // ----------------------------------------------------------------
+    // MEM Stage – Data Memory Interface
     assign dmem_req   = ex_mem_memread || ex_mem_memwrite;
     assign dmem_we    = ex_mem_memwrite;
     assign dmem_addr  = ex_mem_alu_out;
     assign dmem_wdata = ex_mem_rt_val;
 
-    // ----------------------------------------------------------------
     // MEM/WB Pipeline Register
-    // ----------------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             mem_wb_read_data  <= 32'd0;
@@ -390,9 +356,7 @@ module mips_processor(
         end
     end
 
-    // ----------------------------------------------------------------
-    // Hazard Unit  (load-use detection)
-    // ----------------------------------------------------------------
+    // Hazard Unit (load-use detection)
     hazard_unit hu(
         .id_ex_memread (id_ex_memread),
         .id_ex_rt      (id_ex_rt),
@@ -401,9 +365,7 @@ module mips_processor(
         .stall         (stall_haz)
     );
 
-    // ----------------------------------------------------------------
     // Forwarding Unit
-    // ----------------------------------------------------------------
     forwarding_unit fu(
         .id_ex_rs        (id_ex_rs),
         .id_ex_rt        (id_ex_rt),
@@ -415,9 +377,7 @@ module mips_processor(
         .forward_b       (forward_b)
     );
 
-    // ----------------------------------------------------------------
-    // GTKWave Debug Outputs
-    // ----------------------------------------------------------------
+    // GTKWave debug outputs
     assign dbg_r1 = reg_file[1];
     assign dbg_r2 = reg_file[2];
     assign dbg_r3 = reg_file[3];
