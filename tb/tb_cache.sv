@@ -51,8 +51,8 @@ module tb_cache;
             if (cpu.cache_stall) cache_stall_cycles <= cache_stall_cycles + 1;
             // count L1D miss cycles (state != IDLE)
             if (l1d.state != 0)  l1d_miss_cycles <= l1d_miss_cycles + 1;
-            // count L1D hits (ready in same cycle as req, state=IDLE)
-            if (d_req && d_ready && l1d.state == 0) l1d_hit_count <= l1d_hit_count + 1;
+            // count L1D hits (ready in same cycle as req, state=IDLE, and pipeline not stalled)
+            if (d_req && d_ready && l1d.state == 0 && !cpu.cache_stall) l1d_hit_count <= l1d_hit_count + 1;
         end
     end
 
