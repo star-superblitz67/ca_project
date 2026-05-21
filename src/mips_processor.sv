@@ -17,7 +17,7 @@ module mips_processor(
     input  logic [31:0] dmem_rdata,
     input  logic        dmem_ready,
     // GTKWave debug: expose key registers
-    output logic [31:0] dbg_r1, dbg_r2, dbg_r3, dbg_r4, dbg_r5, dbg_r6, dbg_r7, dbg_r8, dbg_r9
+    output logic [31:0] dbg_r1, dbg_r2, dbg_r3, dbg_r4, dbg_r5, dbg_r6, dbg_r7, dbg_r8, dbg_r9, dbg_r10
 );
 
     // imem_stall: waiting for L1I; dmem_stall: waiting for L1D
@@ -63,6 +63,9 @@ module mips_processor(
     assign imem_req  = !rst;
     assign imem_addr = pc_reg;
 
+    logic jump_taken;
+    logic [31:0] jump_target;
+
     always_ff @(posedge clk or posedge rst) begin
         if (rst)
             pc_reg <= 32'd0;
@@ -72,6 +75,8 @@ module mips_processor(
             pc_reg <= branch_target;    // branch redirect
         else if (stall_haz)
             pc_reg <= pc_reg;           // load-use: hold PC
+        else if (jump_taken)
+            pc_reg <= jump_target;      // jump redirect
         else
             pc_reg <= pc_reg + 32'd4;
     end
@@ -95,6 +100,10 @@ module mips_processor(
             // hold: do not accept new instruction
             if_id_pc    <= if_id_pc;
             if_id_instr <= if_id_instr;
+        end else if (jump_taken) begin
+            // flush IF when jump is taken in ID
+            if_id_pc    <= 32'd0;
+            if_id_instr <= 32'd0;
         end else begin
             if_id_pc    <= pc_reg;
             if_id_instr <= imem_rdata;
@@ -113,7 +122,7 @@ module mips_processor(
     assign id_rd_addr = if_id_instr[15:11];
 
     logic ctrl_regwrite, ctrl_memtoreg, ctrl_memwrite, ctrl_memread;
-    logic ctrl_alusrc, ctrl_regdst, ctrl_branch, ctrl_bne;
+    logic ctrl_alusrc, ctrl_regdst, ctrl_branch, ctrl_bne, ctrl_jump;
     logic [2:0] ctrl_aluctrl;
 
     always_comb begin
@@ -126,6 +135,7 @@ module mips_processor(
         ctrl_memtoreg = 1'b0;
         ctrl_branch   = 1'b0;
         ctrl_bne      = 1'b0;
+        ctrl_jump     = 1'b0;
         ctrl_aluctrl  = 3'b010;   // ADD
 
         case (id_opcode)
@@ -169,9 +179,16 @@ module mips_processor(
                 ctrl_bne     = 1'b1;
                 ctrl_aluctrl = 3'b110;
             end
+            6'h02: begin // J
+                ctrl_jump    = 1'b1;
+            end
             default: ; // NOP / unknown → all zeros
         endcase
     end
+
+    // Jump target calculation (resolved in ID)
+    assign jump_taken  = ctrl_jump;
+    assign jump_target = {if_id_pc[31:28], if_id_instr[25:0], 2'b00};
 
     // Immediate extension: zero-extend for ORI, sign-extend otherwise
     assign id_imm_ext = (id_opcode == 6'h0D) ? {16'b0, if_id_instr[15:0]}
@@ -387,5 +404,6 @@ module mips_processor(
     assign dbg_r7 = reg_file[7];
     assign dbg_r8 = reg_file[8];
     assign dbg_r9 = reg_file[9];
+    assign dbg_r10 = reg_file[10];
 
 endmodule

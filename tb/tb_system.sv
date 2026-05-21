@@ -24,7 +24,7 @@ module tb_system;
     logic [31:0] m_addr;
     logic [127:0] m_wdata, m_rdata;
     // debug registers
-    logic [31:0] r1,r2,r3,r4,r5,r6,r7,r8,r9;
+    logic [31:0] r1,r2,r3,r4,r5,r6,r7,r8,r9,r10;
 
     // cycle counters - useful to see the overhead each hazard caused
     integer total_cycles, lu_stall_cycles, cache_stall_cycles;
@@ -46,7 +46,7 @@ module tb_system;
         .dmem_req(d_req),.dmem_we(d_we),.dmem_addr(d_addr),
         .dmem_wdata(d_wdata),.dmem_rdata(d_rdata),.dmem_ready(d_ready),
         .dbg_r1(r1),.dbg_r2(r2),.dbg_r3(r3),.dbg_r4(r4),.dbg_r5(r5),
-        .dbg_r6(r6),.dbg_r7(r7),.dbg_r8(r8),.dbg_r9(r9)
+        .dbg_r6(r6),.dbg_r7(r7),.dbg_r8(r8),.dbg_r9(r9),.dbg_r10(r10)
     );
     cache_l1i l1i(
         .clk(clk),.rst(rst),
@@ -89,6 +89,9 @@ module tb_system;
         $display("Flush proof      : R9=55 before branch; wrong-path would set 111/222");
         $display("L1I miss (blk4)  : ADD  R8 = R6+R7  at branch target block");
         $display("AND instruction  : AND  R9 = R8&R3  (29&13=13)");
+        $display("JUMP instruction : J    0x44 (target in block 4)");
+        $display("Jump flush proof : delay slot 0x3C flushed, R8 != 999");
+        $display("Jump target hit  : ADDI R10 = 42 at 0x44");
         $display("------------------------------------------------");
 
         rst = 1'b1;
@@ -109,6 +112,7 @@ module tb_system;
         chk("R7", r7, 32'd8,  "LW   [L1D hit]");
         chk("R8", r8, 32'd29, "ADD  [branch target - L1I miss]");
         chk("R9", r9, 32'd13, "AND  [29&13=13; flush proof: not 111 or 222]");
+        chk("R10", r10, 32'd42, "ADDI [jump target hit, delay slot flushed]");
 
         $display("");
         $display("--- Cycle Stats ---");

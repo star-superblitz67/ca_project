@@ -61,10 +61,16 @@ module sim_dram(
     // Block 3 (0x30-0x3F) - branch target, L1I miss
     //   0x30: ADD  R8,R6,R7    -> R8 = 29  (21+8, no hazard)
     //   0x34: AND  R9,R8,R3    -> R9 = 13  (29 & 13 = 0b11101 & 0b01101 = 0b01101)
-    //   0x38: NOP
-    //   0x3C: NOP
+    //   0x38: J    0x44        -> Jump to 0x44
+    //   0x3C: ADDI R8,R0,999   -> FLUSHED (in delay slot of jump)
     //
-    // Expected final: R1=8 R2=5 R3=13 R4=8 R5=8 R6=21 R7=8 R8=29 R9=13
+    // Block 4 (0x40-0x4F)
+    //   0x40: ADDI R8,R0,888   -> FLUSHED (not executed, jumped over)
+    //   0x44: ADDI R10,R0,42   -> R10 = 42
+    //   0x48: NOP
+    //   0x4C: NOP
+    //
+    // Expected final: R1=8 R2=5 R3=13 R4=8 R5=8 R6=21 R7=8 R8=29 R9=13 R10=42
 
     initial begin
         // block 0
@@ -80,11 +86,18 @@ module sim_dram(
         //   0x2C: ADDI R9,R0,222 = 0x200900DE  flushed
         memory[2] = {32'h200900DE, 32'h2009006F, 32'h14640002, 32'h20090037};
 
-        // block 3: ADD R8,R6,R7 | AND R9,R8,R3 | NOP | NOP
+        // block 3: ADD R8,R6,R7 | AND R9,R8,R3 | J 0x44 | ADDI R8,R0,999(flushed)
         //   0x30: ADD R8,R6,R7  = 0x00C74020  (R8 = 21+8 = 29)
         //   0x34: AND R9,R8,R3  = 0x01034824  (R9 = 29 & 13 = 13)
-        memory[3] = {32'h00000000, 32'h00000000, 32'h01034824, 32'h00C74020};
+        //   0x38: J   0x44      = 0x08000011  (target = 0x44 >> 2 = 17)
+        //   0x3C: ADDI R8,R0,999 = 0x200803E7 (flushed)
+        memory[3] = {32'h200803E7, 32'h08000011, 32'h01034824, 32'h00C74020};
 
-        for (int i = 4; i < 256; i++) memory[i] = 128'd0;
+        // block 4: ADDI R8,R0,888 | ADDI R10,R0,42 | NOP | NOP
+        //   0x40: ADDI R8,R0,888 = 0x20080378 (jumped over)
+        //   0x44: ADDI R10,R0,42 = 0x200A002A (jump target)
+        memory[4] = {32'h00000000, 32'h00000000, 32'h200A002A, 32'h20080378};
+
+        for (int i = 5; i < 256; i++) memory[i] = 128'd0;
     end
 endmodule

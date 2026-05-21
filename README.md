@@ -72,8 +72,12 @@ Runs a program that hits every feature in one go.
 | 0x2C | ADDI R9, R0, 222 | FLUSHED | wrong path |
 | 0x30 | ADD  R8, R6, R7 | R8=29 | branch target, L1I miss (new block) |
 | 0x34 | AND  R9, R8, R3 | R9=13 | AND instruction (29 & 13 = 13) |
+| 0x38 | J    0x44       | -     | Jump instruction |
+| 0x3C | ADDI R8, R0, 999| FLUSHED | delay slot flushed by jump |
+| 0x40 | ADDI R8, R0, 888| FLUSHED | jumped over |
+| 0x44 | ADDI R10, R0, 42| R10=42 | jump target hit |
 
-Expected: R1=8 R2=5 R3=13 R4=8 R5=8 R6=21 R7=8 R8=29 R9=13
+Expected: R1=8 R2=5 R3=13 R4=8 R5=8 R6=21 R7=8 R8=29 R9=13 R10=42
 
 ---
 
